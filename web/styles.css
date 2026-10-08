@@ -12,254 +12,6 @@
 @keyframes viewIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* Desktop Navigation and Grid */
-@media (min-width: 900px) {
-  body { overflow: hidden; }
-  .app {
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: 72px 1fr;
-    height: 100vh;
-  }
-  .screen {
-    max-width: 720px;
-    margin: 0 auto;
-    width: 100%;
-    grid-row: 2;
-    grid-column: 1;
-    /* Optional: box-shadow or border to delineate it, but let's keep it clean */
-    border-left: 1px solid var(--line);
-    border-right: 1px solid var(--line);
-    background: #fff;
-  }
-  .tabbar {
-    grid-row: 1;
-    grid-column: 1;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-top: none;
-    border-bottom: 1px solid var(--line);
-    padding: 0 32px;
-    background: rgba(255, 253, 249, .96);
-  }
-  .dt-logo {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    text-decoration: none;
-  }
-  .dt-logo[hidden] {
-    display: none;
-  }
-  #tab-links {
-    display: flex;
-    gap: 24px;
-    align-items: center;
-  }
-  .tab {
-    flex-direction: row;
-    gap: 6px;
-    font-size: 14px;
-    padding: 8px 12px;
-    border-radius: 999px;
-  }
-  .tab:hover {
-    background: var(--cream);
-  }
-  .tab .ask-fab {
-    width: 32px;
-    height: 32px;
-    margin-top: 0;
-    border-radius: 10px;
-  }
-  .tab .ask-fab svg {
-    width: 18px;
-    height: 18px;
-  }
-  .topbar, .backbar {
-    background: rgba(255, 255, 255, .96); /* blend with screen bg */
-  }
-  /* Nearby Opt-in Card inside desktop screen */
-  .view:has(.optin) {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-  }
-  .optin {
-    background: var(--paper);
-    border-radius: 32px;
-    box-shadow: var(--shadow-2);
-    min-height: auto;
-    max-width: 480px;
-    width: 100%;
-    padding: 32px;
-  }
-  
-  /* Onboarding / Pre-Auth Mode overrides (Full screen, no rail) */
-  .app.onboarding-mode {
-    display: flex;
-    flex-direction: column;
-    background: radial-gradient(120% 60% at 100% 0%, rgba(248, 212, 187, .55), transparent 60%),
-                radial-gradient(90% 50% at 0% 100%, rgba(224, 238, 235, .7), transparent 60%),
-                var(--cream);
-  }
-  .app.onboarding-mode .tabbar, .app.onboarding-mode .right-rail {
-    display: none !important;
-  }
-  .app.onboarding-mode .screen {
-    flex: 1;
-    max-width: 100%;
-    margin: 0;
-    border: none;
-    background: transparent;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-  }
-  .app.onboarding-mode .view {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    min-height: auto;
-  }
-  
-  /* Regular onboarding steps as a centred card */
-  .app.onboarding-mode .ob, .app.onboarding-mode .google-chooser {
-    background: var(--paper);
-    border-radius: 32px;
-    box-shadow: var(--shadow-2);
-    min-height: auto;
-    max-width: 440px;
-    width: 100%;
-    padding: 40px;
-    border: 1px solid var(--line);
-  }
-  .app.onboarding-mode .google-chooser {
-    padding: 32px;
-  }
-
-  /* Two-column welcome. Grid, not flex: the markup has three siblings
-     (.welcome-hero, .promise, .welcome-cta), and a flex row squeezed them into
-     three narrow columns. The hero and the promise cards share the left column
-     (stacked); the sign-in card sits in the right column across both rows. */
-  .app.onboarding-mode .welcome {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 400px;
-    grid-template-rows: auto auto;
-    column-gap: 64px;
-    row-gap: 0;
-    max-width: 1040px;
-    width: 100%;
-    align-items: center;
-    padding: 0;
-  }
-  .app.onboarding-mode .welcome-hero {
-    margin-top: 0;
-    grid-column: 1;
-    grid-row: 1;
-    align-self: end;
-  }
-  .app.onboarding-mode .welcome .promise {
-    grid-column: 1;
-    grid-row: 2;
-    align-self: start;
-    max-width: 520px;
-    margin-top: 26px;
-  }
-  .app.onboarding-mode .welcome-cta {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-  }
-  .app.onboarding-mode .welcome .mandala {
-    top: -100px;
-    right: auto;
-    left: -100px;
-    width: 500px;
-    height: 500px;
-    opacity: 0.1;
-  }
-  .app.onboarding-mode .welcome-cta {
-    width: 400px;
-    background: var(--paper);
-    border-radius: 32px;
-    box-shadow: var(--shadow-2);
-    padding: 40px;
-    border: 1px solid var(--line);
-    flex: none;
-    margin-top: 0;
-  }
-  .app.onboarding-mode .welcome-cta-header {
-    display: block;
-    text-align: center;
-    margin-bottom: 24px;
-  }
-  .app.onboarding-mode .welcome-cta-header h3 {
-    font-size: 24px;
-    margin-bottom: 4px;
-  }
-  .app.onboarding-mode .welcome-cta-header p {
-    font-size: 14px;
-    color: var(--ink-2);
-  }
-  .app.onboarding-mode .toran {
-    display: none;
-  }
-}
-
-@media (min-width: 1200px) {
-  .app {
-    grid-template-columns: 1fr 720px 300px 1fr;
-  }
-  .tabbar {
-    grid-column: 1 / -1;
-    padding: 0 80px;
-  }
-  #tab-links {
-    margin-right: auto;
-    margin-left: 120px;
-  }
-  .screen {
-    grid-column: 2;
-  }
-  .right-rail {
-    grid-column: 3;
-    grid-row: 2;
-    padding: 24px;
-    overflow-y: auto;
-  }
-  .right-rail[hidden] {
-    display: none;
-  }
-  .rr-section {
-    margin-bottom: 32px;
-  }
-  .rr-section h3 {
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    color: var(--ink-3);
-    margin-bottom: 12px;
-  }
-  .rr-link {
-    display: block;
-    padding: 10px 14px;
-    text-decoration: none;
-    color: var(--ink);
-    font-weight: 600;
-    border-radius: 12px;
-    transition: background .2s;
-    background: #fff;
-    margin-bottom: 8px;
-    box-shadow: 0 1px 3px rgba(80, 45, 20, .06);
-    border: 1px solid var(--line);
-  }
-  .rr-link:hover {
-    background: var(--cream);
-  }
-}
-
 /* Mobile defaults */
 @media (max-width: 899px) {
   .dt-logo { display: none; }
@@ -777,6 +529,255 @@ textarea.input { min-height: 140px; resize: none; line-height: 1.55; }
 .tab .ask-fab { width: 46px; height: 46px; margin-top: -20px; border-radius: 16px; background: linear-gradient(135deg, #D27148, var(--terracotta)); color: #fff; display: grid; place-items: center; box-shadow: 0 8px 18px rgba(185, 87, 47, .35); }
 .tab .ask-fab svg { width: 24px; height: 24px; }
 .tab[aria-current="page"] .ask-fab { background: linear-gradient(135deg, var(--teal-2), var(--teal)); box-shadow: 0 8px 18px rgba(30, 77, 79, .35); }
+
+@media (min-width: 900px) {
+  body { overflow: hidden; }
+  .app {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 72px 1fr;
+    height: 100vh;
+  }
+  .screen {
+    max-width: 720px;
+    margin: 0 auto;
+    width: 100%;
+    grid-row: 2;
+    grid-column: 1;
+    /* Optional: box-shadow or border to delineate it, but let's keep it clean */
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    background: #fff;
+  }
+  .tabbar {
+    grid-row: 1;
+    grid-column: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: none;
+    border-bottom: 1px solid var(--line);
+    padding: 0 32px;
+    background: rgba(255, 253, 249, .96);
+  }
+  .dt-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
+  .dt-logo[hidden] {
+    display: none;
+  }
+  #tab-links {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+  }
+  .tab {
+    flex-direction: row;
+    gap: 6px;
+    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: 999px;
+  }
+  .tab:hover {
+    background: var(--cream);
+  }
+  .tab .ask-fab {
+    width: 32px;
+    height: 32px;
+    margin-top: 0;
+    border-radius: 10px;
+  }
+  .tab .ask-fab svg {
+    width: 18px;
+    height: 18px;
+  }
+  .topbar, .backbar {
+    background: rgba(255, 255, 255, .96); /* blend with screen bg */
+  }
+  .topbar .logo { display: none; }
+  /* Nearby Opt-in Card inside desktop screen */
+  .view:has(.optin) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+  .optin {
+    background: var(--paper);
+    border-radius: 32px;
+    box-shadow: var(--shadow-2);
+    min-height: auto;
+    max-width: 480px;
+    width: 100%;
+    padding: 32px;
+  }
+  
+  /* Onboarding / Pre-Auth Mode overrides (Full screen, no rail) */
+  .app.onboarding-mode {
+    display: flex;
+    flex-direction: column;
+    background: radial-gradient(120% 60% at 100% 0%, rgba(248, 212, 187, .55), transparent 60%),
+                radial-gradient(90% 50% at 0% 100%, rgba(224, 238, 235, .7), transparent 60%),
+                var(--cream);
+  }
+  .app.onboarding-mode .tabbar, .app.onboarding-mode .right-rail {
+    display: none !important;
+  }
+  .app.onboarding-mode .screen {
+    flex: 1;
+    max-width: 100%;
+    margin: 0;
+    border: none;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .app.onboarding-mode .view {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    min-height: auto;
+  }
+  
+  /* Regular onboarding steps as a centred card */
+  .app.onboarding-mode .ob, .app.onboarding-mode .google-chooser {
+    background: var(--paper);
+    border-radius: 32px;
+    box-shadow: var(--shadow-2);
+    min-height: auto;
+    max-width: 440px;
+    width: 100%;
+    padding: 40px;
+    border: 1px solid var(--line);
+  }
+  .app.onboarding-mode .google-chooser {
+    padding: 32px;
+  }
+
+  /* Two-column welcome. Grid, not flex: the markup has three siblings
+     (.welcome-hero, .promise, .welcome-cta), and a flex row squeezed them into
+     three narrow columns. The hero and the promise cards share the left column
+     (stacked); the sign-in card sits in the right column across both rows. */
+  .app.onboarding-mode .welcome {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    grid-template-rows: auto auto;
+    column-gap: 64px;
+    row-gap: 0;
+    max-width: 1040px;
+    width: 100%;
+    align-items: center;
+    padding: 0;
+  }
+  .app.onboarding-mode .welcome-hero {
+    margin-top: 0;
+    grid-column: 1;
+    grid-row: 1;
+    align-self: end;
+  }
+  .app.onboarding-mode .welcome .promise {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+    max-width: 520px;
+    margin-top: 26px;
+  }
+  .app.onboarding-mode .welcome-cta {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+  .app.onboarding-mode .welcome .mandala {
+    top: -100px;
+    right: auto;
+    left: -100px;
+    width: 500px;
+    height: 500px;
+    opacity: 0.1;
+  }
+  .app.onboarding-mode .welcome-cta {
+    width: 400px;
+    background: var(--paper);
+    border-radius: 32px;
+    box-shadow: var(--shadow-2);
+    padding: 40px;
+    border: 1px solid var(--line);
+    flex: none;
+    margin-top: 0;
+  }
+  .app.onboarding-mode .welcome-cta-header {
+    display: block;
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .app.onboarding-mode .welcome-cta-header h3 {
+    font-size: 24px;
+    margin-bottom: 4px;
+  }
+  .app.onboarding-mode .welcome-cta-header p {
+    font-size: 14px;
+    color: var(--ink-2);
+  }
+  .app.onboarding-mode .toran {
+    display: none;
+  }
+}
+
+@media (min-width: 1200px) {
+  .app {
+    grid-template-columns: 1fr 720px 300px 1fr;
+  }
+  .tabbar {
+    grid-column: 1 / -1;
+    padding: 0 80px;
+  }
+  #tab-links {
+    margin-right: auto;
+    margin-left: 120px;
+  }
+  .screen {
+    grid-column: 2;
+  }
+  .right-rail {
+    grid-column: 3;
+    grid-row: 2;
+    padding: 24px;
+    overflow-y: auto;
+  }
+  .right-rail[hidden] {
+    display: none;
+  }
+  .rr-section {
+    margin-bottom: 32px;
+  }
+  .rr-section h3 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--ink-3);
+    margin-bottom: 12px;
+  }
+  .rr-link {
+    display: block;
+    padding: 10px 14px;
+    text-decoration: none;
+    color: var(--ink);
+    font-weight: 600;
+    border-radius: 12px;
+    transition: background .2s;
+    background: #fff;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 3px rgba(80, 45, 20, .06);
+    border: 1px solid var(--line);
+  }
+  .rr-link:hover {
+    background: var(--cream);
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
