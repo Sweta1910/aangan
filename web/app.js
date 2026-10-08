@@ -263,7 +263,7 @@
     opts = opts || {};
     // Firestore posts carry no reactions/answers and may name an unknown circle;
     // fall back instead of throwing, which would blank the whole feed.
-    var c = circle(p.circle) || D.circles[0];
+    var c = p.circle ? circle(p.circle) : null;
     var name = p.anon ? "Anonymous mom" : (p.author || "Mom");
     var count = (window.Backend && window.Backend.isReal) ? (p.replyCount || 0) : answersFor(p).length;
     return '<article class="card post ' + (opts.full ? "" : "clickable") + '" ' + (opts.full ? "" : 'data-href="#q/' + p.id + '"') + ' id="post-' + p.id + '">' +
@@ -271,7 +271,7 @@
       '<div class="who"><b>' + esc(name) + "</b><span>" + esc(p.meta) + " · " + esc(p.time) + "</span></div>" +
       (opts.full ? '<button class="icon-btn" data-act="post-menu" data-id="' + p.id + '" aria-label="More options">' + icon("more") + "</button>" : "") +
       "</div>" +
-      (opts.full ? "" : '<div class="post-tagrow"><a class="tag" style="text-decoration:none" href="#circle/' + c.id + '">' + c.emoji + " " + esc(c.name) + "</a></div>") +
+      (opts.full || !c ? "" : '<div class="post-tagrow"><a class="tag" style="text-decoration:none" href="#circle/' + c.id + '">' + c.emoji + " " + esc(c.name) + "</a></div>") +
       "<h3>" + esc(p.title) + "</h3>" +
       (p.body ? '<p class="body ' + (opts.full ? "" : "clamp") + '">' + esc(p.body) + "</p>" : "") +
       '<div class="post-foot">' + reactionBar(p.id, p.reactions || {}) +
@@ -430,18 +430,19 @@
     var picks = D.circles.map(function (c) {
       return '<button class="chip" data-act="ask-circle" data-id="' + c.id + '" aria-pressed="' + (askDraft.circle === c.id) + '">' + c.emoji + " " + esc(c.name) + "</button>";
     }).join("");
-    var canPost = askDraft.circle && askDraft.title.trim().length > 4;
+    var canPost = askDraft.title.trim().length > 4;
     return { tab: "ask", html:
       '<div class="view"><header class="topbar"><h1>Ask your circle</h1><button class="icon-btn" data-act="go" data-to="#home" aria-label="Close">' + icon("close") + "</button></header>" +
       '<div class="compose">' +
-      '<div class="field"><span class="label">Which circle?</span><div class="circle-pick">' + picks + "</div></div>" +
+      '<div class="field"><span class="label">Circle <span class="tiny">(optional)</span></span><div class="circle-pick">' + picks + "</div></div>" +
       '<div class="field"><label for="ask-title">Your question</label><input class="input" id="ask-title" data-input="ask-title" maxlength="140" placeholder="e.g. How did you handle the first week of daycare?" value="' + esc(askDraft.title) + '"></div>' +
       '<div class="field"><label for="ask-body">Add details <span class="tiny">(optional)</span></label><textarea class="input" id="ask-body" data-input="ask-body" maxlength="1200" placeholder="Share as much or as little as you like. This is a safe space.">' + esc(askDraft.body) + "</textarea>" +
       '<p class="demo-link">✨ <button class="link" data-act="ask-demo" id="kindness-demo">See the kindness check in action</button></p></div>' +
       '<div class="card toggle-row" style="margin-top:16px"><div class="grow"><b>Post anonymously</b><span>' + (askDraft.anon ? 'Hidden from other moms. Aangan\'s moderators can see who posted, for safety.' : "Shown as " + esc(store.profile.nickname)) + "</span></div>" + switchEl(askDraft.anon, "ask-anon", "Post anonymously") + "</div>" +
       '<div class="anon-preview">' + avatar(askDraft.anon ? null : store.profile.nickname, D.me.hue, "sm") + "<span>Posting as <b>" + (askDraft.anon ? "Anonymous mom" : esc(store.profile.nickname)) + "</b></span></div>" +
       '<div id="ask-nudge-slot">' + (askDraft.nudge ? nudgeHtml(askDraft.body || askDraft.title, askDraft.nudge, "ask") : "") + "</div>" +
-      '<div style="margin-top:18px"><button class="btn btn-primary btn-block" data-act="ask-post" id="ask-post"' + (canPost ? "" : " disabled") + ">Post question</button></div>" +
+      '<div style="margin-top:18px"><button class="btn btn-primary btn-block" data-act="ask-post" id="ask-post"' + (canPost ? "" : " disabled") + ">Post question</button>" +
+      '<p class="tiny ask-hint" id="ask-hint" style="text-align:center;margin-top:6px;' + (canPost ? "display:none;" : "") + '">Add a title (at least 5 characters) to post</p></div>' +
       '<p class="tiny" style="text-align:center;margin-top:10px;font-weight:600">Moms supporting moms — not a replacement for your doctor or therapist.</p>' +
       '<p class="tiny" style="text-align:center;margin-top:4px">Be kind. Every mom here is doing her best. 💛</p>' +
       "</div></div>" };
@@ -452,7 +453,7 @@
     var p = post(id);
     if (!p) return V.home();
     if (replyDraft.pid !== id) replyDraft = { pid: id, text: "", anon: store.profile.anonDefault, nudge: null };
-    var c = circle(p.circle) || D.circles[0];
+    var c = p.circle ? circle(p.circle) : null;
     var ans = answersFor(p).slice().sort(function (a, b) { return (b.expert ? 1 : 0) - (a.expert ? 1 : 0); });
     var list = ans.map(function (a) {
       var name = a.anon ? "Anonymous mom" : a.author;
@@ -464,7 +465,7 @@
         '<p class="body">' + esc(a.body) + '</p><div class="post-foot">' + reactionBar(p.id + "/" + a.id, a.reactions || {}) + "</div></article>";
     }).join("");
     return { tab: null, after: function () { var t = $("#reply-text"); if (t && t.value) { t.style.height = "auto"; t.style.height = Math.min(120, t.scrollHeight) + "px"; } }, html:
-      '<div class="view" style="padding-bottom:0"><div class="backbar"><button class="icon-btn" data-act="back" aria-label="Back">' + icon("back") + '</button><span class="title">' + c.emoji + " " + esc(c.name) + "</span></div>" +
+      '<div class="view" style="padding-bottom:0"><div class="backbar"><button class="icon-btn" data-act="back" aria-label="Back">' + icon("back") + '</button><span class="title">' + (c ? (c.emoji + " " + esc(c.name)) : "Community") + "</span></div>" +
       '<div class="q-detail">' + postCard(p, { full: true }) + "</div>" +
       '<div class="answers-head"><h2>' + ans.length + " supportive " + (ans.length === 1 ? "reply" : "replies") + '</h2><span class="tiny">Kindest first</span></div>' +
       '<div class="answers">' + (list || emptyState("🤍", "No replies yet", "Share what worked for you — even a hug helps.")) + "</div>" +
@@ -945,7 +946,7 @@
         break;
       }
       case "join": store.joined[id] = store.joined[id] === false; save(); rerender(); toast(store.joined[id] === false ? "Left circle" : "Joined 💛"); break;
-      case "ask-circle": askDraft.circle = id; askDraft.nudge = null; rerender(); break;
+      case "ask-circle": askDraft.circle = (askDraft.circle === id ? null : id); askDraft.nudge = null; rerender(); break;
       case "ask-anon": askDraft.anon = !askDraft.anon; rerender(); break;
       case "ask-demo":
         if (!askDraft.circle) askDraft.circle = "toddlers";
@@ -953,6 +954,7 @@
         askDraft.body = D.kindness.demoAsk; askDraft.nudge = kindnessScan(askDraft.body); rerender();
         setTimeout(function () { var n = $("#ask-nudge"); if (n) n.scrollIntoView({ behavior: "smooth", block: "center" }); }, 50); break;
       case "ask-post": {
+        if (!askDraft.title || askDraft.title.trim().length <= 4) break;
         var textToScan = askDraft.title + " " + askDraft.body;
         if (worryingScan(textToScan) && !askDraft.skipWorry) {
            showSafetySheet("ask-post-worry-skip");
@@ -964,8 +966,9 @@
         var authorName = isAnon ? null : store.profile.nickname;
         var stages = store.profile.stages || [];
         var meta = stages.length ? "Mom · " + stages.join(", ") : "Mom";
-        var cId = askDraft.circle;
-        var cn = (circle(cId) || { name: "the circle" }).name;
+        var cId = askDraft.circle || null;
+        var cObj = cId ? circle(cId) : null;
+        var cn = cObj ? cObj.name : "the circle";
         
         if (window.Backend && window.Backend.isReal) {
           if (!window.Backend.user) { toast("Please sign in to post"); go("#welcome"); break; }
@@ -1151,7 +1154,9 @@
       var b = $("#about-continue"); if (b) b.disabled = !v.trim();
     } else if (k === "ask-title" || k === "ask-body") {
       askDraft[k === "ask-title" ? "title" : "body"] = v;
-      var bt = $("#ask-post"); if (bt) bt.disabled = !(askDraft.circle && askDraft.title.trim().length > 4);
+      var canPost = askDraft.title.trim().length > 4;
+      var bt = $("#ask-post"); if (bt) bt.disabled = !canPost;
+      var hint = $("#ask-hint"); if (hint) hint.style.display = canPost ? "none" : "";
     } else if (k === "reply-text") {
       replyDraft.text = v;
       e.target.style.height = "auto"; e.target.style.height = Math.min(120, e.target.scrollHeight) + "px";

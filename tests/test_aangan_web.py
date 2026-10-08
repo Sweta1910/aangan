@@ -78,6 +78,11 @@ class TestShell(unittest.TestCase):
         self.assertIn('name="viewport"', src)
         self.assertIn('name="description"', src)
 
+    def test_cache_busting_present(self):
+        html = _read("index.html")
+        self.assertRegex(html, r'src="app\.js\?v=[\da-f]{7}"')
+        self.assertRegex(html, r'src="backend\.js\?v=[\da-f]{7}"')
+
     def test_js_syntax_with_node_if_available(self):
         node = shutil.which("node")
         if not node:
@@ -340,12 +345,28 @@ class TestRealModeHardening(unittest.TestCase):
         self.assertIn('if (!t) return "just now";', self.app)
         self.assertIn('serverTimestamps: "estimate"', self.backend)
         self.assertIn("reactionBar(p.id, p.reactions || {})", self.app)
-        self.assertIn("circle(p.circle) || D.circles[0]", self.app)
+        self.assertIn("p.circle ? circle(p.circle) : null", self.app)
 
     def test_listeners_have_error_callbacks_and_wait_for_sign_in(self):
         self.assertEqual(self.backend.count("onSnapshot(q, function(snap)"), 2)
         self.assertEqual(self.backend.count("if (onError) onError(e);"), 2)
         self.assertIn("if (!B.user) { B.posts = []; return; }", self.app)
+
+    def test_circle_optional_when_posting(self):
+        # canPost check only needs title > 4 chars, circle is optional
+        self.assertIn("var canPost = askDraft.title.trim().length > 4;", self.app)
+        self.assertNotIn("askDraft.circle && askDraft.title", self.app)
+        # circle picker label indicates optional
+        self.assertIn('Circle <span class="tiny">(optional)</span>', self.app)
+        # ask-post button has hint when disabled
+        self.assertIn('id="ask-hint"', self.app)
+        self.assertIn("Add a title (at least 5 characters) to post", self.app)
+        # circle can be deselected by clicking again
+        self.assertIn("askDraft.circle = (askDraft.circle === id ? null : id);", self.app)
+        # firestore rules do not mandate circle field
+        self.assertNotIn("request.resource.data.circle is string", self.rules)
+        # backend stores null when circle is empty/not chosen
+        self.assertIn('circle: (circle && typeof circle === "string" && circle.trim()) ? circle.trim() : null', self.backend)
 
     def test_backend_js_syntax_with_node_if_available(self):
         node = shutil.which("node")
@@ -357,8 +378,3 @@ class TestRealModeHardening(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-    def test_cache_busting_present(self):
-        html = (self.web / "index.html").read_text()
-        self.assertRegex(html, r'src="app\.js\?v=[\da-f]{7}"')
-        self.assertRegex(html, r'src="backend\.js\?v=[\da-f]{7}"')

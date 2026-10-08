@@ -114,7 +114,7 @@
           uid: uid,
           author: anon ? null : str(authorName, "Mom"),
           anon: anon,
-          circle: str(circle, ""),
+          circle: (circle && typeof circle === "string" && circle.trim()) ? circle.trim() : null,
           title: str(title, ""),
           body: str(body, ""),
           meta: str(meta, "Mom"),
