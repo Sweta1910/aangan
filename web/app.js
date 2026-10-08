@@ -194,6 +194,27 @@
       "</div>";
   }
 
+  // Client-side demo only: A real launch needs server-side moderation + trained human review.
+  var WORRY_PHRASES = ["kill myself", "end my life", "want to die", "hurt myself", "hurt my baby", "better off without me", "can't go on", "no reason to live"];
+  function worryingScan(text) {
+    var lower = String(text).toLowerCase();
+    for (var i = 0; i < WORRY_PHRASES.length; i++) {
+      if (lower.indexOf(WORRY_PHRASES[i]) >= 0) return true;
+    }
+    return false;
+  }
+
+  function showSafetySheet(postCbAction) {
+    var html = '<div style="padding:10px">' +
+      '<div style="text-align:center;margin-bottom:16px"><span style="font-size:32px">🤍</span></div>' +
+      '<h3 style="text-align:center;margin-bottom:8px">It sounds like you\'re carrying a lot right now. You deserve support right away.</h3>' +
+      '<p class="tiny" style="text-align:center;margin-bottom:24px">National Maternal Mental Health Hotline: 1-833-852-6262<br>988 Suicide & Crisis Lifeline: 988</p>' +
+      '<button class="btn btn-primary btn-block" data-act="sheet-close-then-safety" style="margin-bottom:12px">Talk to someone now</button>' +
+      '<button class="btn btn-ghost btn-block" data-act="' + postCbAction + '">Post to the circle</button>' +
+      '</div>';
+    openSheet(html);
+  }
+
   // ---------------------------------------------------------- components
   function reactionBar(key, counts) {
     return D.reactions.map(function (r) {
@@ -246,6 +267,7 @@
       '<div class="auth-divider"><span>or</span></div>' +
       '<button class="btn btn-primary btn-block" data-act="start-phone-onboard" id="get-started">Continue with phone</button>' +
       '<button class="btn btn-ghost btn-block" data-act="skip-onboarding" id="have-account">I already have an account</button>' +
+      '<p class="tiny" style="margin-bottom:8px;font-weight:600">Moms supporting moms — not a replacement for your doctor or therapist.</p>' +
       '<p class="tiny">Prototype · all people, posts and places are fictional demo data</p>' +
       "</div></div>" };
   };
@@ -331,7 +353,9 @@
   function homeTop() {
     var c = byId(D.cities, store.city);
     return '<header class="topbar"><div class="logo">' + logoMark() + '<div><div class="logo-word">' + esc(BRAND.name) + '</div><div class="sub">' + icon("pin", "") .replace('class=""', 'style="width:12px;height:12px"') + esc(c.name) + "</div></div></div>" +
-      '<span style="flex:1"></span><a class="icon-btn" href="#chats" aria-label="Messages" id="open-chats">' + icon("chat") + '<span class="dot"></span></a></header>';
+      '<span style="flex:1"></span>' +
+      '<a href="#safety" class="icon-btn" aria-label="Need help now?" style="color:var(--plum)">' + icon("shield") + '</a>' +
+      '<a class="icon-btn" href="#chats" aria-label="Messages" id="open-chats">' + icon("chat") + '<span class="dot"></span></a></header>';
   }
 
   V.home = function () {
@@ -381,7 +405,8 @@
       '<div class="anon-preview">' + avatar(askDraft.anon ? null : store.profile.nickname, D.me.hue, "sm") + "<span>Posting as <b>" + (askDraft.anon ? "Anonymous mom" : esc(store.profile.nickname)) + "</b></span></div>" +
       '<div id="ask-nudge-slot">' + (askDraft.nudge ? nudgeHtml(askDraft.body || askDraft.title, askDraft.nudge, "ask") : "") + "</div>" +
       '<div style="margin-top:18px"><button class="btn btn-primary btn-block" data-act="ask-post" id="ask-post"' + (canPost ? "" : " disabled") + ">Post question</button></div>" +
-      '<p class="tiny" style="text-align:center;margin-top:10px">Be kind. Every mom here is doing her best. 💛</p>' +
+      '<p class="tiny" style="text-align:center;margin-top:10px;font-weight:600">Moms supporting moms — not a replacement for your doctor or therapist.</p>' +
+      '<p class="tiny" style="text-align:center;margin-top:4px">Be kind. Every mom here is doing her best. 💛</p>' +
       "</div></div>" };
   };
 
@@ -411,7 +436,8 @@
       '<div class="reply-anon">' + switchEl(replyDraft.anon, "reply-anon", "Reply anonymously") + "Reply " + (replyDraft.anon ? "anonymously" : "as " + esc(store.profile.nickname)) +
       '<span style="flex:1"></span><button class="link" style="font-size:12px" data-act="reply-demo" id="reply-kindness-demo">Try kindness check</button></div>' +
       '<div class="reply-inner"><textarea id="reply-text" data-input="reply-text" rows="1" placeholder="Write a kind reply…" aria-label="Write a reply">' + esc(replyDraft.text) + "</textarea>" +
-      '<button class="send-btn" data-act="reply-send" aria-label="Send reply" id="reply-send">' + icon("send") + "</button></div></div></div>" };
+      '<button class="send-btn" data-act="reply-send" aria-label="Send reply" id="reply-send">' + icon("send") + "</button></div></div>" +
+      '<p class="tiny" style="text-align:center;margin-top:10px;font-weight:600">Moms supporting moms — not a replacement for your doctor or therapist.</p></div>' };
   };
 
   function mapSvg(activeHood) {
@@ -545,6 +571,31 @@
       '<p class="footer-note">Only moms you\'ve both said hi to can message you.</p></div>' };
   };
 
+
+  // Helplines verified 2026-10-08. PSI (postpartum.net/get-help/psi-helpline/): call 1-800-944-4773,
+  // text "HELP" to 800-944-4773; PSI says it is NOT a crisis hotline. 988: 988lifeline.org.
+  // National Maternal Mental Health Hotline 1-833-852-6262 (HRSA, mchb.hrsa.gov; 24/7 call/text).
+  // Demo only: a real launch needs server-side moderation and trained human review.
+  V.safety = function () {
+    return { tab: "me", html:
+      '<div class="view"><header class="topbar"><h1>Safety centre</h1><button class="icon-btn" data-act="back" aria-label="Back">' + icon("back") + "</button></header>" +
+      '<div class="card" style="margin-top:20px;text-align:center">' +
+      '<div style="font-size:32px;margin-bottom:12px">🤍</div>' +
+      '<h2 style="margin-bottom:8px">You deserve support right away</h2>' +
+      '<p class="muted">The first two lines are free, confidential, and open 24/7.</p></div>' +
+      '<div class="settings-group"><h3>National Maternal Mental Health Hotline</h3><div class="card">' +
+      '<a class="link-row" href="tel:18338526262" style="text-decoration:none;color:inherit">' + icon("phone") + '<span class="grow">Call 1-833-852-6262</span>' + icon("chevron") + "</a>" +
+      '<a class="link-row" href="sms:18338526262" style="text-decoration:none;color:inherit">' + icon("chat") + '<span class="grow">Text 1-833-852-6262</span>' + icon("chevron") + "</a></div></div>" +
+      '<div class="settings-group"><h3>988 Suicide & Crisis Lifeline</h3><div class="card">' +
+      '<a class="link-row" href="tel:988" style="text-decoration:none;color:inherit">' + icon("phone") + '<span class="grow">Call 988</span>' + icon("chevron") + "</a>" +
+      '<a class="link-row" href="sms:988" style="text-decoration:none;color:inherit">' + icon("chat") + '<span class="grow">Text 988</span>' + icon("chevron") + "</a></div></div>" +
+      '<div class="settings-group"><h3>Postpartum Support International (support, not a crisis line)</h3><div class="card">' +
+      '<a class="link-row" href="tel:18009444773" style="text-decoration:none;color:inherit">' + icon("phone") + '<span class="grow">Call 1-800-944-4773</span>' + icon("chevron") + "</a>" +
+      '<a class="link-row" href="sms:18009444773&body=HELP" style="text-decoration:none;color:inherit">' + icon("chat") + '<span class="grow">Text \u201cHELP\u201d to 800-944-4773 (English)</span>' + icon("chevron") + "</a></div></div>" +
+      '<p class="footer-note">If you or your baby are in immediate danger, call 911.<br><br>Moms supporting moms \u2014 not a replacement for your doctor or therapist.</p>' +
+      "</div>" };
+  };
+
   V.me = function () {
     var p = store.profile;
     var authMethodLabel = (store.authMethod === "google" || store.verify.google) ? "Google" : "phone";
@@ -569,7 +620,7 @@
       '<div class="settings-group"><h3>Safety</h3><div class="card">' +
       '<button class="link-row" data-act="blocked-list">' + icon("block") + '<span class="grow">Blocked moms</span><span class="tiny">' + store.blocked.length + "</span>" + icon("chevron") + "</button>" +
       '<button class="link-row" data-act="guidelines">' + icon("book") + '<span class="grow">Community guidelines</span>' + icon("chevron") + "</button>" +
-      '<button class="link-row" data-act="soon">' + icon("shield") + '<span class="grow">Safety centre & crisis lines</span>' + icon("chevron") + "</button></div></div>" +
+      '<a class="link-row" href="#safety" style="text-decoration:none;color:inherit">' + icon("shield") + '<span class="grow">Safety centre & crisis lines</span>' + icon("chevron") + "</a></div></div>" +
       '<div class="settings-group"><h3>Account</h3><div class="card">' +
       '<button class="link-row" data-act="go" data-to="#onboard/city">' + icon("pin") + '<span class="grow">City</span><span class="tiny">' + esc(c.name) + "</span>" + icon("chevron") + "</button>" +
       '<button class="link-row" data-act="reset" id="reset-demo">' + icon("reset") + '<span class="grow">Reset demo</span>' + icon("chevron") + "</button></div></div>" +
@@ -634,7 +685,8 @@
           '<div class="rr-section"><h3>Upcoming Meetups</h3>' + 
           D.events.slice(0, 2).map(function(e) { return '<a class="rr-link" href="#meetups">🗓️ ' + esc(e.title) + '</a>'; }).join('') + 
           '</div>' +
-          '<div class="rr-section"><h3>Kindness Guidelines</h3><p class="tiny">Supportive reactions only — no downvotes, no shaming. A safe space for moms.</p></div>';
+          '<div class="rr-section"><h3>Kindness Guidelines</h3><p class="tiny">Supportive reactions only — no downvotes, no shaming. A safe space for moms.</p></div>' +
+          '<div class="rr-section"><a href="#safety" class="rr-link" style="color:var(--plum);font-weight:600">🤍 Need help now?</a></div>';
       }
     }
 
@@ -801,7 +853,12 @@
         askDraft.body = D.kindness.demoAsk; askDraft.nudge = kindnessScan(askDraft.body); rerender();
         setTimeout(function () { var n = $("#ask-nudge"); if (n) n.scrollIntoView({ behavior: "smooth", block: "center" }); }, 50); break;
       case "ask-post": {
-        var hits = kindnessScan(askDraft.title + " " + askDraft.body);
+        var textToScan = askDraft.title + " " + askDraft.body;
+        if (worryingScan(textToScan) && !askDraft.skipWorry) {
+           showSafetySheet("ask-post-worry-skip");
+           break;
+        }
+        var hits = kindnessScan(textToScan);
         if (hits.length && !askDraft.skipKind) { askDraft.nudge = hits; rerender(); setTimeout(function () { var n = $("#ask-nudge"); if (n) n.scrollIntoView({ behavior: "smooth", block: "center" }); }, 50); break; }
         var p = { id: "u" + Date.now(), circle: askDraft.circle, anon: askDraft.anon, author: askDraft.anon ? null : store.profile.nickname, hue: D.me.hue,
           meta: store.profile.stages.length ? "Mom · " + store.profile.stages.join(", ") : "Mom", time: "now", title: askDraft.title.trim(), body: askDraft.body.trim(),
@@ -834,6 +891,10 @@
       case "reply-send": {
         var txt = replyDraft.text.trim();
         if (!txt) { $("#reply-text").focus(); break; }
+        if (worryingScan(txt) && !replyDraft.skipWorry) {
+           showSafetySheet("reply-send-worry-skip");
+           break;
+        }
         var rh = kindnessScan(txt);
         if (rh.length && !replyDraft.skipKind) { replyDraft.nudge = rh; rerender(); setTimeout(function () { var s = $("#screen"); s.scrollTop = s.scrollHeight; }, 30); break; }
         var pid = replyDraft.pid;
@@ -853,6 +914,22 @@
       }
       case "mom-menu": { var mm = mom(id); reportSheet({ title: mm.nickname, subject: "this profile", momId: id, name: mm.nickname }); break; }
       case "chat-menu": { var cm = mom(id); reportSheet({ title: "Chat with " + cm.nickname, subject: "this conversation", momId: id, name: cm.nickname }); break; }
+      case "ask-post-worry-skip":
+        askDraft.skipWorry = true;
+        closeSheet();
+        onClick({ target: $("#ask-post") });
+        askDraft.skipWorry = false;
+        break;
+      case "reply-send-worry-skip":
+        replyDraft.skipWorry = true;
+        closeSheet();
+        onClick({ target: $("#reply-send") });
+        replyDraft.skipWorry = false;
+        break;
+      case "sheet-close-then-safety":
+        closeSheet();
+        go("#safety");
+        break;
       case "sheet-close": closeSheet(); break;
       case "report-start": {
         var lbl = el.getAttribute("data-label");

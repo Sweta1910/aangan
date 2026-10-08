@@ -159,10 +159,26 @@ class TestData(unittest.TestCase):
             self.assertEqual(len(rewrite), 1)
             self.assertFalse(any(re.search(r"\b" + re.escape(p) + r"\b", rewrite[0].lower()) for p in phrases))
 
+
+    def test_safety_centre(self):
+        app_js = _read("app.js")
+        self.assertIn("1-833-852-6262", app_js)
+        self.assertIn("988", app_js)
+        self.assertIn("1-800-944-4773", app_js)
+        self.assertIn("WORRY_PHRASES", app_js)
+
+    def test_no_soon_stub_for_safety(self):
+        app_js = _read("app.js")
+        self.assertNotIn('data-act="soon">' + 'icon("shield") + \'<span class="grow">Safety centre & crisis lines</span>', app_js)
+
+    def test_postpartum_circle_exists(self):
+        circles = {c["id"] for c in self.d["circles"]}
+        self.assertIn("postpartum-feelings", circles)
+
     def test_views_exist_for_every_screen(self):
         js = _read("app.js")
         for view in ("V.welcome", 'V["onboard/city"]', 'V["onboard/about"]', 'V["onboard/verify"]', "V.home",
-                     "V.ask", "V.q", "V.nearby", "V.meetups", "V.chat", "V.me"):
+                     "V.ask", "V.q", "V.nearby", "V.meetups", "V.chat", "V.me", "V.safety"):
             self.assertIn(view + " = function", js)
 
     def test_google_and_phone_auth_elements(self):

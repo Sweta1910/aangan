@@ -31,9 +31,43 @@ window.AANGAN_DATA = {
     { "id": "working", "name": "Working moms", "emoji": "💼", "desc": "Pumping, leave, guilt, juggling", "members": 367 },
     { "id": "schools", "name": "Daycare & schools", "emoji": "🎒", "desc": "MVWSD · Sunnyvale SD · preschools", "members": 298 },
     { "id": "food", "name": "Desi food & groceries", "emoji": "🍛", "desc": "Recipes, tiffins, where to find methi", "members": 501 },
-    { "id": "me-time", "name": "Mental health & me-time", "emoji": "🌿", "desc": "You matter too", "members": 340 }
+    { "id": "me-time", "name": "Mental health & me-time", "emoji": "🌿", "desc": "You matter too", "members": 340 },
+    { "id": "postpartum-feelings", "name": "Postpartum feelings", "emoji": "🤍", "desc": "Hard days, heavy thoughts, small wins. Anonymous by default.", "members": 128 }
   ],
   "posts": [
+    {
+      "id": "ppf1", "circle": "postpartum-feelings", "anon": true, "author": null, "meta": "Mom of a 2-month-old", "time": "2h",
+      "title": "I thought I'd be happier.",
+      "body": "Everyone says this is the best time of my life but I just cry every afternoon. My husband doesn't get it. Is this normal?",
+      "reactions": { "hug": 24, "been": 30, "helpful": 0 },
+      "answers": [
+        {
+          "id": "ppf1a", "anon": true, "author": null, "time": "1h",
+          "body": "It is so normal. The hormone crash is real. Please tell your OB — medication changed everything for me. Sending you so much love.",
+          "reactions": { "hug": 15, "been": 10, "helpful": 22 }
+        }
+      ]
+    },
+    {
+      "id": "ppf2", "circle": "postpartum-feelings", "anon": true, "author": null, "meta": "Mom of a 6-month-old", "time": "5h",
+      "title": "Does the rage ever go away?",
+      "body": "I get so unreasonably angry at my partner for breathing too loudly. I hate feeling like this.",
+      "reactions": { "hug": 45, "been": 56, "helpful": 0 },
+      "answers": [
+        {
+          "id": "ppf2a", "anon": true, "author": null, "time": "4h",
+          "body": "Yes, postpartum rage is a symptom of PPA/PPD. You're not a bad person, your nervous system is just overwhelmed. Therapy helps.",
+          "reactions": { "hug": 20, "been": 5, "helpful": 40 }
+        }
+      ]
+    },
+    {
+      "id": "ppf3", "circle": "postpartum-feelings", "anon": false, "author": "QuietChai", "hue": "teal", "meta": "Mom of a 1-year-old", "time": "1d",
+      "title": "Small win: I took a shower and didn't rush.",
+      "body": "Just wanted to share that I took a 15-minute shower today while the baby napped and I didn't feel guilty. It gets better, mamas.",
+      "reactions": { "hug": 89, "been": 12, "helpful": 2 },
+      "answers": []
+    },
     {
       "id": "p1", "circle": "working", "anon": true, "author": null, "meta": "Mom of a 5-month-old", "time": "2h",
       "title": "Supply dropping after going back to work — is it just me?",
