@@ -1,9 +1,8 @@
-"""Structural tests for the Saathi web prototype (apps/saathi/web).
+"""Structural tests for the Saathi web prototype (web/).
 
-These run inside the scoped apps/ ship gate, so they are stdlib-only and fast:
-they prove the static app is complete and self-consistent without a browser.
-Rendering and click-path coverage lives in scripts/screenshots.py (Playwright),
-which fails on any uncaught page error.
+These are stdlib-only and fast: they prove the static app is complete and
+self-consistent without a browser. Rendering and click-path coverage lives
+in scripts/screenshots.py (Playwright), which fails on any uncaught page error.
 """
 
 import html.parser

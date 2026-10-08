@@ -9,7 +9,7 @@ no build step, no API keys. Every person, post and event is fictional; avatars a
 ## Run it
 
 ```bash
-cd apps/saathi/web && python3 -m http.server 8765
+cd web && python3 -m http.server 8765
 ```
 
 Open **http://localhost:8765/** — on a laptop it shows in a phone frame with quick links to every
@@ -50,10 +50,10 @@ Screenshots of every screen (390×844 @2x) are in [`screenshots/`](screenshots/)
 ## Tests & screenshots
 
 ```bash
-# structural tests (stdlib only; run by the scoped ship gate)
-python3 -m unittest apps/saathi/tests/test_saathi_web.py
+# structural tests (stdlib only)
+python3 -m unittest tests/test_saathi_web.py
 # re-shoot all screens + smoke-test the JS (needs Playwright; fails on any page error)
-/Users/swetashree/liquid/venv/bin/python apps/saathi/scripts/screenshots.py
+python3 scripts/screenshots.py
 ```
 
 ## Next steps

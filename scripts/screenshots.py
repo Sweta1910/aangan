@@ -1,14 +1,14 @@
 """Capture phone-size screenshots of every Saathi screen with headless Chromium.
 
 Why a script (not manual screenshots): the prototype is meant to be iterated on,
-so re-shooting all screens must be one command. It serves apps/saathi/web on a
+so re-shooting all screens must be one command. It serves web/ on a
 free local port, walks the real click-paths (onboarding -> verify -> home ->
 ask + kindness check -> question -> nearby opt-in -> say hi -> meetups -> chat ->
-profile) and writes PNGs to apps/saathi/screenshots/. Any uncaught page error
+profile) and writes PNGs to screenshots/. Any uncaught page error
 fails the run, so this doubles as a smoke test of the JS.
 
-Run from the repo root with the root venv (Playwright lives there):
-    /Users/swetashree/liquid/venv/bin/python apps/saathi/scripts/screenshots.py
+Run from the repo root (requires Playwright):
+    python3 scripts/screenshots.py
 """
 
 import functools
