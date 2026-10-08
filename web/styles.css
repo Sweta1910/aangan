@@ -1,4 +1,168 @@
-/* Aangan prototype — design system + components.
+/* ---------- Frame ---------- */
+.app {
+  position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden;
+  background:
+    radial-gradient(120% 60% at 100% 0%, rgba(248, 212, 187, .55), transparent 60%),
+    radial-gradient(90% 50% at 0% 100%, rgba(224, 238, 235, .7), transparent 60%),
+    var(--cream);
+}
+.screen { flex: 1; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth; outline: none; }
+.screen::-webkit-scrollbar { width: 0; }
+.view { animation: viewIn .35s var(--ease); padding-bottom: 28px; min-height: 100%; }
+@keyframes viewIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Desktop Navigation and Grid */
+@media (min-width: 900px) {
+  body { overflow: hidden; }
+  .app {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 72px 1fr;
+    height: 100vh;
+  }
+  .screen {
+    max-width: 720px;
+    margin: 0 auto;
+    width: 100%;
+    grid-row: 2;
+    grid-column: 1;
+    /* Optional: box-shadow or border to delineate it, but let's keep it clean */
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    background: #fff;
+  }
+  .tabbar {
+    grid-row: 1;
+    grid-column: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: none;
+    border-bottom: 1px solid var(--line);
+    padding: 0 32px;
+    background: rgba(255, 253, 249, .96);
+  }
+  .dt-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
+  .dt-logo[hidden] {
+    display: none;
+  }
+  #tab-links {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+  }
+  .tab {
+    flex-direction: row;
+    gap: 6px;
+    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: 999px;
+  }
+  .tab:hover {
+    background: var(--cream);
+  }
+  .tab .ask-fab {
+    width: 32px;
+    height: 32px;
+    margin-top: 0;
+    border-radius: 10px;
+  }
+  .tab .ask-fab svg {
+    width: 18px;
+    height: 18px;
+  }
+  .topbar, .backbar {
+    background: rgba(255, 255, 255, .96); /* blend with screen bg */
+  }
+  /* Onboarding / Centered cards on soft background */
+  .view:has(.welcome), .view:has(.ob), .view:has(.optin) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+  .welcome, .ob, .optin {
+    background: var(--paper);
+    border-radius: 32px;
+    box-shadow: var(--shadow-2);
+    min-height: auto;
+    max-width: 480px;
+    width: 100%;
+    padding: 32px;
+    border: 1px solid var(--line);
+  }
+  .welcome .toran { margin: -32px -32px 0 -32px; border-radius: 32px 32px 0 0; }
+}
+
+@media (min-width: 1200px) {
+  .app {
+    grid-template-columns: 1fr 720px 300px 1fr;
+  }
+  .tabbar {
+    grid-column: 1 / -1;
+    padding: 0 80px;
+  }
+  #tab-links {
+    margin-right: auto;
+    margin-left: 120px;
+  }
+  .screen {
+    grid-column: 2;
+  }
+  .right-rail {
+    grid-column: 3;
+    grid-row: 2;
+    padding: 24px;
+    overflow-y: auto;
+  }
+  .right-rail[hidden] {
+    display: none;
+  }
+  .rr-section {
+    margin-bottom: 32px;
+  }
+  .rr-section h3 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--ink-3);
+    margin-bottom: 12px;
+  }
+  .rr-link {
+    display: block;
+    padding: 10px 14px;
+    text-decoration: none;
+    color: var(--ink);
+    font-weight: 600;
+    border-radius: 12px;
+    transition: background .2s;
+    background: #fff;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 3px rgba(80, 45, 20, .06);
+    border: 1px solid var(--line);
+  }
+  .rr-link:hover {
+    background: var(--cream);
+  }
+}
+
+/* Mobile defaults */
+@media (max-width: 899px) {
+  .dt-logo { display: none; }
+  #tab-links {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+  }
+  .right-rail { display: none; }
+}
+
+/* ---------- Top bars ---------- *//* Aangan prototype — design system + components.
    Palette: warm cream paper, marigold + terracotta warmth, deep teal for primary
    actions (high contrast with white text), plum as a quiet secondary accent.
    Mobile-first: on phones the app fills the viewport; on desktop it sits in a
@@ -50,51 +214,6 @@ button { cursor: pointer; border: 0; background: none; padding: 0; }
 :focus-visible { outline: 3px solid rgba(232, 163, 61, .7); outline-offset: 2px; border-radius: 8px; }
 h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -.01em; margin: 0; line-height: 1.2; }
 p { margin: 0; }
-
-/* ---------- Frame ---------- */
-.phone { position: relative; width: 100%; height: 100vh; height: 100dvh; }
-.app {
-  position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden;
-  background:
-    radial-gradient(120% 60% at 100% 0%, rgba(248, 212, 187, .55), transparent 60%),
-    radial-gradient(90% 50% at 0% 100%, rgba(224, 238, 235, .7), transparent 60%),
-    var(--cream);
-}
-.screen { flex: 1; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth; outline: none; }
-.screen::-webkit-scrollbar { width: 0; }
-.view { animation: viewIn .35s var(--ease); padding-bottom: 28px; min-height: 100%; }
-@keyframes viewIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-
-.showcase { display: none; }
-
-@media (min-width: 640px) {
-  body {
-    display: flex; align-items: center; justify-content: center; gap: 64px; padding: 24px;
-    background:
-      radial-gradient(60% 80% at 15% 20%, #FBE3CF, transparent 70%),
-      radial-gradient(50% 70% at 90% 90%, #DDEBE7, transparent 70%),
-      #F7EDE3;
-  }
-  .phone {
-    width: 390px; height: min(844px, calc(100vh - 48px)); flex: none;
-    border-radius: 48px; padding: 10px; background: #2A1F1B;
-    box-shadow: 0 40px 80px rgba(60, 30, 10, .25), 0 0 0 1px rgba(0, 0, 0, .3), inset 0 0 0 2px #4a3a33;
-  }
-  .app { border-radius: 38px; }
-}
-@media (min-width: 1040px) {
-  .showcase { display: block; max-width: 340px; }
-  .showcase .sc-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
-  .showcase h2 { font-size: 40px; letter-spacing: -.02em; }
-  .showcase p { color: var(--ink-2); margin: 10px 0 22px; font-size: 16px; }
-  .showcase .sc-links { display: flex; flex-wrap: wrap; gap: 8px; }
-  .showcase .sc-links a {
-    text-decoration: none; color: var(--teal); background: rgba(255, 255, 255, .7); border: 1px solid var(--line);
-    padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; transition: background .2s, transform .2s;
-  }
-  .showcase .sc-links a:hover { background: #fff; transform: translateY(-1px); }
-  .showcase small { display: block; margin-top: 22px; color: var(--ink-3); font-size: 12px; }
-}
 
 /* ---------- Top bars ---------- */
 .topbar {

@@ -124,12 +124,49 @@ def main():
         desk = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
         dp = desk.new_page()
         dp.on("pageerror", lambda e: errors.append(str(e)))
-        dp.goto(base + "#home")
-        dp.evaluate("document.fonts.ready")
-        dp.wait_for_timeout(600)
-        path = os.path.join(OUT_DIR, "23-desktop-frame.png")
-        dp.screenshot(path=path)
-        shots.append(path)
+        dp.on("console", lambda m: m.type == "error" and errors.append(m.text))
+
+        def d_settle(ms=450):
+            dp.evaluate("document.fonts.ready")
+            dp.wait_for_timeout(ms)
+
+        def d_shot(name, ms=450):
+            d_settle(ms)
+            path = os.path.join(OUT_DIR, f"{name}.png")
+            dp.screenshot(path=path)
+            shots.append(path)
+
+        def d_goto(hash_):
+            dp.evaluate(f"location.hash = '{hash_}'")
+            d_settle(300)
+
+        # Clear localstorage for desktop context and go to welcome
+        dp.goto(base + "#welcome")
+        dp.evaluate("localStorage.clear()")
+        dp.reload()
+        d_shot("23-desktop-welcome")
+
+        # Google sign-in demo flow for desktop
+        dp.click("#google-signin")
+        d_shot("24-desktop-google-chooser", 600)
+        dp.click("[data-act='pick-google-account']")
+        
+        # Go to home
+        d_goto("#home")
+        d_shot("25-desktop-home-feed", 2900)
+        
+        # Circle
+        d_goto("#circle/working")
+        d_shot("26-desktop-circle")
+        
+        # Ask
+        d_goto("#ask")
+        d_shot("27-desktop-ask")
+        
+        # Nearby
+        d_goto("#nearby")
+        d_shot("28-desktop-nearby", 2900)
+
         browser.close()
 
     httpd.shutdown()

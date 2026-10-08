@@ -605,13 +605,33 @@
     } else screen.scrollTop = 0;
     lastRoute = routeKey;
     var tabbar = $("#tabbar");
+    var dtLogo = $("#dt-logo");
+    if (dtLogo) dtLogo.innerHTML = logoMark() + '<span class="logo-word" style="font-size:22px">' + esc(BRAND.name) + '</span>';
     tabbar.hidden = out.tab === null && ["chats"].indexOf(r.name) < 0;
-    tabbar.innerHTML = TABS.map(function (t) {
+    var tabLinks = $("#tab-links") || tabbar;
+    tabLinks.innerHTML = TABS.map(function (t) {
       var cur = out.tab === t.id ? ' aria-current="page"' : "";
       var ic = t.fab ? '<span class="ask-fab">' + icon(t.icon) + "</span>" : icon(t.icon);
       return '<a class="tab" href="' + t.href + '"' + cur + ' id="tab-' + t.id + '">' + ic + "<span>" + t.label + "</span></a>";
     }).join("");
     document.title = BRAND.name + " — " + BRAND.tagline;
+    
+    var rightRail = $("#right-rail");
+    if (rightRail) {
+      if (out.tab === null || ["onboard/city", "onboard/about", "onboard/verify"].indexOf(r.name) >= 0 || r.name === "welcome") {
+        rightRail.hidden = true;
+      } else {
+        rightRail.hidden = false;
+        rightRail.innerHTML = '<div class="rr-section"><h3>Your Circles</h3>' + 
+          D.circles.slice(0, 3).map(function(c) { return '<a class="rr-link" href="#circle/' + c.id + '">' + c.emoji + ' ' + esc(c.name) + '</a>'; }).join('') + 
+          '</div>' +
+          '<div class="rr-section"><h3>Upcoming Meetups</h3>' + 
+          D.events.slice(0, 2).map(function(e) { return '<a class="rr-link" href="#meetups">🗓️ ' + esc(e.title) + '</a>'; }).join('') + 
+          '</div>' +
+          '<div class="rr-section"><h3>Kindness Guidelines</h3><p class="tiny">Supportive reactions only — no downvotes, no shaming. A safe space for moms.</p></div>';
+      }
+    }
+
     if (out.after) out.after();
   }
   function go(hash) { if (location.hash === hash) render(); else location.hash = hash; }
@@ -915,7 +935,8 @@
   function showcase() {
     var links = [["#welcome", "Welcome"], ["#onboard/city", "City picker"], ["#onboard/about", "About you"], ["#onboard/verify", "Verification"], ["#home", "Home feed"],
       ["#ask", "Ask"], ["#q/p1", "Question + expert"], ["#nearby", "Nearby moms"], ["#meetups", "Meetups"], ["#chat/m1", "Chat"], ["#me", "Profile & privacy"]];
-    $("#showcase").innerHTML = '<div class="sc-logo">' + logoMark() + '<span class="logo-word">' + esc(BRAND.name) + "</span></div>" +
+    var sc = $("#showcase");
+    if (sc) sc.innerHTML = '<div class="sc-logo">' + logoMark() + '<span class="logo-word">' + esc(BRAND.name) + "</span></div>" +
       "<h2>" + esc(BRAND.tagline) + "</h2><p>" + esc(BRAND.blurb) + " Launching first in Mountain View &amp; Sunnyvale.</p>" +
       '<div class="sc-links">' + links.map(function (l) { return '<a href="' + l[0] + '">' + l[1] + "</a>"; }).join("") + "</div>" +
       "<small>Clickable prototype · mock data only · all people are fictional</small>";

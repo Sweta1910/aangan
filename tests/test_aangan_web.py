@@ -65,7 +65,9 @@ class TestShell(unittest.TestCase):
         p.feed(_read("index.html"))
         self.assertEqual(p.errors, [])
         self.assertEqual(p.stack, [], "unclosed tags in index.html")
-        for needed in ("screen", "tabbar", "sheet", "toast", "showcase"):
+        for needed in ("screen", "tabbar", "sheet", "toast", "dt-logo", "right-rail"):
+            self.assertNotIn("showcase", p.ids)
+            self.assertNotIn("phone", p.ids)
             self.assertIn(needed, p.ids)
         self.assertEqual(p.scripts, ["data.js", "app.js"], "data.js must load before app.js")
         for ref in p.scripts + p.styles:
@@ -213,6 +215,13 @@ class TestData(unittest.TestCase):
                     except Exception:
                         pass
 
+
+    def test_css_has_responsive_layout(self):
+        css = _read("styles.css")
+        self.assertNotIn('.phone {', css)
+        self.assertNotIn('.showcase {', css)
+        self.assertIn('@media (min-width: 900px)', css, "Must have desktop breakpoint")
+        self.assertIn('@media (min-width: 1200px)', css, "Must have right-rail breakpoint")
 
 if __name__ == "__main__":
     unittest.main()
