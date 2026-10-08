@@ -1,4 +1,4 @@
-/* Saathi prototype — single-file SPA, zero backend.
+/* Aangan prototype — single-file SPA, zero backend.
  *
  * Why this shape: the prototype must open from `python3 -m http.server` (or even
  * file://) with no build step, so it is plain ES2017 in one IIFE. Views are pure
@@ -7,7 +7,7 @@
  * #chat/m1 ...) make every screen deep-linkable, which is also what the
  * screenshot script relies on.
  *
- * State: immutable mock content lives in data.js (window.SAATHI_DATA). Anything
+ * State: immutable mock content lives in data.js (window.AANGAN_DATA). Anything
  * the visitor does (posts, reactions, RSVPs, hi-requests, chats, privacy
  * settings) is kept in `store` and persisted to localStorage so a demo survives
  * a refresh. "Reset demo" on the Me tab clears it.
@@ -15,9 +15,9 @@
 (function () {
   "use strict";
 
-  var D = window.SAATHI_DATA;
+  var D = window.AANGAN_DATA;
   var BRAND = D.brand; // single rename point: change brand.name in data.js
-  var STORE_KEY = "saathi.demo.v1";
+  var STORE_KEY = "aangan.demo.v1";
 
   // ---------------------------------------------------------------- store
   function freshStore() {
@@ -933,5 +933,5 @@
   });
 
   // Exposed for tests/screenshot tooling only.
-  window.SAATHI = { kindnessScan: kindnessScan, softenText: softenText, reset: function () { localStorage.removeItem(STORE_KEY); } };
+  window.AANGAN = { kindnessScan: kindnessScan, softenText: softenText, reset: function () { localStorage.removeItem(STORE_KEY); } };
 })();

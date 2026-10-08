@@ -1,6 +1,6 @@
-window.SAATHI_DATA = {
+window.AANGAN_DATA = {
   "brand": {
-    "name": "Saathi",
+    "name": "Aangan",
     "tagline": "No judgement. Just moms.",
     "blurb": "A kind, women-only space for Indian moms to share, ask and meet up nearby."
   },

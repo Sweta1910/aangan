@@ -1,4 +1,4 @@
-# Saathi — clickable prototype
+# Aangan — clickable prototype
 
 > **No judgement. Just moms.** A women-only, judgement-free community app for Indian moms,
 > launching city by city — starting with **Mountain View / Sunnyvale, CA**.
@@ -24,7 +24,7 @@ screen; on a phone it fills the screen. Opening `web/index.html` directly also w
 | 1 | Welcome | `#welcome` | Brand, promise, "Continue with Google" / "Continue with phone" |
 | 2 | City picker | `#onboard/city` | MV/Sunnyvale live; tap Cupertino / San Jose / Fremont / Santa Clara to join a waitlist |
 | 3 | About you | `#onboard/about` | Nickname, anonymous-by-default toggle, kids' stages, 10 languages |
-| 4 | Verification (mock) | `#onboard/verify` | Phone code or Google account check → "Enter Saathi" |
+| 4 | Verification (mock) | `#onboard/verify` | Phone code or Google account check → "Enter Aangan" |
 | 5 | Home feed | `#home` | 9 circles, posts (anonymous or nickname), Hug / Been there / Helpful reactions — no downvotes |
 | 6 | Circle | `#circle/<id>` | Join, filtered posts, "Ask in this circle" |
 | 7 | Ask | `#ask` | Pick circle, anonymous toggle, **"See the kindness check in action"** |
@@ -51,7 +51,7 @@ Screenshots of every screen (390×844 @2x) are in [`screenshots/`](screenshots/)
 
 ```bash
 # structural tests (stdlib only)
-python3 -m unittest tests/test_saathi_web.py
+python3 -m unittest tests/test_aangan_web.py
 # re-shoot all screens + smoke-test the JS (needs Playwright; fails on any page error)
 python3 scripts/screenshots.py
 ```
@@ -65,6 +65,6 @@ python3 scripts/screenshots.py
 2. **Real backend** — Firebase Auth (Google sign-in + phone OTP) + Firestore for posts/circles/chats,
    server-side moderation for the kindness check, and coarse geohash-to-neighbourhood bucketing so
    exact location is never stored.
-3. **Name & brand** — validate "Saathi" (trademark/app-store availability), test the tagline with
+3. **Name & brand** — validate "Aangan" (trademark/app-store availability), test the tagline with
    a few moms, and get a proper logo/illustration set.
 4. **Pilot** — 20–30 MV/Sunnyvale moms, measure weekly posts per member and hi→chat conversion.

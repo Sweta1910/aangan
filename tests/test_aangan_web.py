@@ -1,4 +1,4 @@
-"""Structural tests for the Saathi web prototype (web/).
+"""Structural tests for the Aangan web prototype (web/).
 
 These are stdlib-only and fast: they prove the static app is complete and
 self-consistent without a browser. Rendering and click-path coverage lives
@@ -15,7 +15,7 @@ import unittest
 
 APP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 WEB_DIR = os.path.join(APP_DIR, "web")
-DATA_PREFIX = "window.SAATHI_DATA = "
+DATA_PREFIX = "window.AANGAN_DATA = "
 
 
 def _read(name):
@@ -24,9 +24,9 @@ def _read(name):
 
 
 def load_data():
-    """data.js is `window.SAATHI_DATA = <strict JSON>;` so it can be parsed here."""
+    """data.js is `window.AANGAN_DATA = <strict JSON>;` so it can be parsed here."""
     src = _read("data.js").strip()
-    assert src.startswith(DATA_PREFIX), "data.js must start with the SAATHI_DATA prefix"
+    assert src.startswith(DATA_PREFIX), "data.js must start with the AANGAN_DATA prefix"
     return json.loads(src[len(DATA_PREFIX):].rstrip(";"))
 
 
@@ -95,10 +95,10 @@ class TestData(unittest.TestCase):
         cls.d = load_data()
 
     def test_brand_is_single_constant(self):
-        self.assertEqual(self.d["brand"]["name"], "Saathi")
+        self.assertEqual(self.d["brand"]["name"], "Aangan")
         self.assertIn("No judgement", self.d["brand"]["tagline"])
         # app.js must read the name from data, never hard-code it.
-        self.assertNotIn('"Saathi"', _read("app.js"))
+        self.assertNotIn('"Aangan"', _read("app.js"))
 
     def test_launch_city_live_others_soon(self):
         live = [c for c in self.d["cities"] if c["status"] == "live"]
@@ -195,6 +195,23 @@ class TestData(unittest.TestCase):
                     with open(path, encoding="utf-8") as f:
                         content = f.read().lower()
                         self.assertNotIn("selfie", content, f"Found unexpected 'selfie' reference in {fname}")
+
+    def test_no_saathi_references_in_codebase(self):
+        root_dir = os.path.dirname(WEB_DIR)
+        for root, dirs, files in os.walk(root_dir):
+            if ".git" in root.split(os.sep):
+                continue
+            for fname in files:
+                path = os.path.join(root, fname)
+                if fname == "test_aangan_web.py":
+                    continue
+                if fname.endswith((".js", ".html", ".css", ".json", ".md", ".py")):
+                    try:
+                        with open(path, encoding="utf-8") as f:
+                            content = f.read().lower()
+                            self.assertNotIn("saathi", content, f"Found unexpected 'saathi' reference in {path}")
+                    except Exception:
+                        pass
 
 
 if __name__ == "__main__":
