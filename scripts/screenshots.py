@@ -79,12 +79,24 @@ def main():
         page.evaluate("localStorage.clear()")
         page.reload()
         shot("01-welcome")
+
+        # Google sign-in demo flow
+        page.click("#google-signin")
+        shot("01a-google-chooser", 600)
+        page.click("[data-act='pick-google-account']")
+        shot("01b-after-google-signin", 600)
+        goto("#onboard/verify")
+        shot("01c-google-verify-done", 600)
+
+        # Reset back to welcome to walk the standard phone onboarding & full app flow
+        page.evaluate("localStorage.clear()")
+        goto("#welcome")
+        page.reload()
         page.click("#get-started"); shot("02-city-picker")
         page.click("#city-continue"); shot("03-about-you")
         page.click("#about-continue"); shot("04-verify-start")
         page.click("#verify-phone"); page.wait_for_timeout(900)
-        page.click("#verify-selfie"); page.wait_for_timeout(1500)
-        shot("05-verify-done", 2800)
+        shot("05-verify-done", 1800)
         page.click("#enter-app"); shot("06-home", 2900)
         scroll(560); shot("07-home-feed")
         goto("#circle/working"); shot("08-circle")

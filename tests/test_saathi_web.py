@@ -163,6 +163,39 @@ class TestData(unittest.TestCase):
                      "V.ask", "V.q", "V.nearby", "V.meetups", "V.chat", "V.me"):
             self.assertIn(view + " = function", js)
 
+    def test_google_and_phone_auth_elements(self):
+        app_js = _read("app.js")
+        styles = _read("styles.css")
+        # Google sign-in button exists with official branding
+        self.assertIn("Continue with Google", app_js)
+        self.assertIn("btn-google", app_js)
+        self.assertIn(".btn-google", styles)
+        self.assertIn("google-signin", app_js)
+
+        # "or" divider exists between sign-in options
+        self.assertIn("auth-divider", app_js)
+        self.assertIn(".auth-divider", styles)
+        self.assertIn(">or<", app_js)
+
+        # signInWithGoogle demo stub exists with Firebase Auth migration documentation
+        self.assertIn("function signInWithGoogle", app_js)
+        self.assertIn("GoogleAuthProvider", app_js)
+        self.assertIn("signInWithPopup", app_js)
+
+        # Phone flow is still present
+        self.assertIn("verify-phone", app_js)
+        self.assertIn("Phone verified", app_js)
+        self.assertIn("get-started", app_js)
+
+    def test_no_selfie_references_in_web(self):
+        for root, _, files in os.walk(WEB_DIR):
+            for fname in files:
+                if fname.endswith((".js", ".html", ".css", ".json")):
+                    path = os.path.join(root, fname)
+                    with open(path, encoding="utf-8") as f:
+                        content = f.read().lower()
+                        self.assertNotIn("selfie", content, f"Found unexpected 'selfie' reference in {fname}")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -25,8 +25,9 @@
       onboarded: false,
       city: "mv-sv",
       waitlist: [],
-      profile: { nickname: D.me.nickname, anonDefault: true, stages: ["Toddler"], langs: ["English", "Hindi"] },
-      verify: { phone: false, selfie: false },
+      profile: { nickname: D.me.nickname, fullName: "", email: "", anonDefault: true, stages: ["Toddler"], langs: ["English", "Hindi"] },
+      verify: { phone: false, google: false },
+      authMethod: null,
       nearbyOn: false,
       msgPolicy: "mutual",
       posts: [],          // posts created in this demo session
@@ -115,6 +116,15 @@
       '<path d="M51 25.5c-9.5 0-16 5.5-19 15.5 10.5 1 17-4.5 19-15.5z" fill="#E8A33D"/>' +
       '<path d="M17 46c4.6 2.6 9.6 3.8 15 3.8S42.4 48.6 47 46" stroke="#1E4D4F" stroke-width="3.2" fill="none" stroke-linecap="round"/>' +
       "</svg>";
+  }
+  function googleIcon(size) {
+    var sz = size || 18;
+    return '<svg viewBox="0 0 24 24" width="' + sz + '" height="' + sz + '" class="google-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">' +
+      '<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>' +
+      '<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>' +
+      '<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>' +
+      '<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>' +
+      '</svg>';
   }
   function mandala() {
     // Concentric petal rings, drawn at low opacity behind the welcome hero.
@@ -226,12 +236,14 @@
       "<h1>No judgement.<br><em>Just moms.</em></h1>" +
       "<p>" + esc(BRAND.blurb) + "</p></div>" +
       '<div class="promise">' +
-      promiseRow("🤍", "var(--plum-soft)", "Women-only & verified", "Every member is verified by phone + selfie") +
+      promiseRow("🤍", "var(--plum-soft)", "Women-only & verified", "Every member is verified by phone or Google") +
       promiseRow("🫶", "var(--peach)", "Anonymous when you need it", "Ask anything without your name on it") +
       promiseRow("📍", "var(--teal-soft)", "Moms near you", "Starting in Mountain View & Sunnyvale") +
       "</div>" +
       '<div class="welcome-cta">' +
-      '<button class="btn btn-primary btn-block" data-act="go" data-to="#onboard/city" id="get-started">Get started</button>' +
+      '<button class="btn btn-google btn-block" data-act="google-signin" id="google-signin">' + googleIcon(18) + "<span>Continue with Google</span></button>" +
+      '<div class="auth-divider"><span>or</span></div>' +
+      '<button class="btn btn-primary btn-block" data-act="start-phone-onboard" id="get-started">Continue with phone</button>' +
       '<button class="btn btn-ghost btn-block" data-act="skip-onboarding" id="have-account">I already have an account</button>' +
       '<p class="tiny">Prototype · all people, posts and places are fictional demo data</p>' +
       "</div></div>" };
@@ -290,20 +302,27 @@
 
   V["onboard/verify"] = function () {
     var v = store.verify;
+    var isGoogle = !!(v.google || store.authMethod === "google");
     var phoneState = v.phone ? '<span class="done-badge">' + icon("check") + "Phone verified</span>"
       : '<div class="phone-input"><input class="input cc" value="+1" aria-label="Country code" readonly><input class="input" value="(650) 555-0142" aria-label="Phone number" inputmode="tel"></div>' +
         '<button class="btn btn-ghost btn-sm" style="margin-top:10px" data-act="verify-phone" id="verify-phone">Send code</button>';
-    var selfieState = v.selfie === true ? '<span class="done-badge">' + icon("check") + "Selfie check passed</span>"
-      : v.selfie === "checking" ? '<span class="tiny">Checking… (demo)</span>'
-      : '<button class="btn btn-ghost btn-sm" data-act="verify-selfie" id="verify-selfie">' + icon("camera") + "Take a quick selfie</button>";
+
+    var verifyCard;
+    if (isGoogle) {
+      verifyCard = '<div class="card verify-card"><span class="vi" style="background:#fff;border:1px solid #dadce0">' + googleIcon(22) + '</span><div class="grow"><b>Google account verified</b><span class="tiny">' + esc(store.profile.email || "priya.sharma@gmail.com") + '</span><div class="state"><span class="done-badge">' + icon("check") + "Verified with Google</span></div></div></div>";
+    } else {
+      verifyCard = '<div class="card verify-card"><span class="vi">' + icon("phone") + '</span><div class="grow"><b>Verify your phone</b><span class="tiny">One account per number — keeps out fake profiles.</span><div class="state">' + phoneState + "</div></div></div>" +
+        (v.phone ? "" : '<div class="auth-divider" style="margin:14px 0 10px"><span>or</span></div>' +
+          '<button class="btn btn-google btn-block btn-sm" data-act="google-signin" id="verify-google">' + googleIcon(16) + '<span>Verify with Google instead</span></button>');
+    }
+
+    var canEnter = isGoogle || v.phone;
     return { tab: null, html:
       '<div class="view">' + obBack("#onboard/about") + '<div class="ob">' + steps(3) +
       "<h1>Keeping it moms-only</h1>" +
       '<p class="lead">A quick, private check so this stays a women-only space.</p>' +
-      '<div class="card verify-card"><span class="vi">' + icon("phone") + '</span><div class="grow"><b>Verify your phone</b><span class="tiny">One account per number — keeps out fake profiles.</span><div class="state">' + phoneState + "</div></div></div>" +
-      '<div class="card verify-card"><span class="selfie-ring">' + (v.selfie === true ? icon("check") : icon("user")) + '</span><div class="grow"><b>Selfie check</b><span class="tiny">Confirms you\'re a real woman. Takes 5 seconds.</span><div class="state">' + selfieState + "</div></div></div>" +
-      '<div class="safety-note">' + icon("lock") + "<span>Your selfie is used only for verification and deleted after review. It is never shown on your profile or to other moms.</span></div>" +
-      '<div class="ob-foot"><button class="btn btn-primary btn-block" data-act="finish-onboarding" id="enter-app"' + (v.phone && v.selfie === true ? "" : " disabled") + ">Enter " + esc(BRAND.name) + "</button>" +
+      verifyCard +
+      '<div class="ob-foot"><button class="btn btn-primary btn-block" data-act="finish-onboarding" id="enter-app"' + (canEnter ? "" : " disabled") + ">Enter " + esc(BRAND.name) + "</button>" +
       '<p class="tiny" style="text-align:center;margin-top:10px">Demo: no real data is sent anywhere.</p></div>' +
       "</div></div>" };
   };
@@ -527,6 +546,7 @@
 
   V.me = function () {
     var p = store.profile;
+    var authMethodLabel = (store.authMethod === "google" || store.verify.google) ? "Google" : "phone";
     var policy = [
       ["mutual", "Only moms I've said hi to", "Recommended · chat after a mutual hello"],
       ["verified", "Any verified mom", "Still women-only and verified"],
@@ -538,7 +558,7 @@
     return { tab: "me", html:
       '<div class="view"><header class="topbar"><h1>Me</h1></header>' +
       '<div class="card profile-card">' + avatar(p.nickname, D.me.hue, "xl") +
-      "<h2>" + esc(p.nickname) + '</h2><span class="verified">' + icon("shield") + "Verified mom · phone + selfie</span>" +
+      "<h2>" + esc(p.nickname) + '</h2><span class="verified">' + icon("shield") + "Verified mom · " + authMethodLabel + "</span>" +
       '<div class="chips">' + p.stages.map(function (s) { return '<span class="tag marigold">' + esc(s) + "</span>"; }).join("") + p.langs.map(function (s) { return '<span class="tag teal">' + esc(s) + "</span>"; }).join("") + "</div>" +
       '<div class="stats"><div><b>' + (2 + store.posts.length) + "</b><span>Questions</span></div><div><b>" + (7 + Object.keys(store.answers).reduce(function (n, k) { return n + store.answers[k].length; }, 0)) + "</b><span>Replies</span></div><div><b>" + (31 + Object.keys(store.reacted).length) + "</b><span>Hugs given</span></div></div></div>" +
       '<div class="settings-group"><h3>Privacy</h3><div class="card">' +
@@ -618,6 +638,70 @@
     openSheet("<h3>" + esc(opts.title) + '</h3><p class="muted">Reports are anonymous. Our moderators review every one within 24 hours.</p><div class="sheet-list">' + items + "</div>");
   }
 
+  // ------------------------------------------------------------- auth (demo)
+  /* signInWithGoogle: Demo stub simulating Google OAuth account selection.
+   *
+   * In production with Firebase Auth, replace this demo stub with:
+   *   import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+   *   const auth = getAuth();
+   *   const provider = new GoogleAuthProvider();
+   *   provider.addScope("profile");
+   *   provider.addScope("email");
+   *   try {
+   *     const result = await signInWithPopup(auth, provider);
+   *     const user = result.user; // user.displayName, user.email, user.photoURL
+   *     // Sync user profile to Firestore / store
+   *   } catch (error) {
+   *     console.error("Google sign-in failed:", error);
+   *   }
+   *
+   * Requirements for production:
+   *   1. A configured Firebase project with Google sign-in provider enabled in Firebase Console.
+   *   2. OAuth 2.0 Web Client ID registered in Google Cloud Console with authorized redirect URIs.
+   *   3. Firebase SDK scripts / bundle (firebase/app, firebase/auth) initialized with project config.
+   * No API keys or external Firebase scripts are loaded in this static prototype.
+   */
+  function signInWithGoogle(account) {
+    if (!account) {
+      openGoogleChooser();
+      return;
+    }
+    store.authMethod = "google";
+    store.verify.google = true;
+    var firstName = account.name ? (account.name.split(" ")[0] || account.name) : "Priya";
+    store.profile.nickname = firstName;
+    store.profile.fullName = account.name || "Priya Sharma";
+    store.profile.email = account.email || "priya.sharma@gmail.com";
+    save();
+    toast("Signed in as " + store.profile.fullName + " ✓");
+    go("#onboard/city");
+  }
+
+  function openGoogleChooser() {
+    var accounts = [
+      { name: "Priya Sharma", email: "priya.sharma@gmail.com", initial: "P", color: "#6366F1" },
+      { name: "Ananya Iyer", email: "ananya.iyer@gmail.com", initial: "A", color: "#0D9488" }
+    ];
+    var accHtml = accounts.map(function (a) {
+      return '<button class="sheet-item gc-account-item" data-act="pick-google-account" data-name="' + esc(a.name) + '" data-email="' + esc(a.email) + '">' +
+        '<span class="avatar sm" style="background:' + a.color + ';color:#fff">' + a.initial + '</span>' +
+        '<span class="grow"><b>' + esc(a.name) + '</b><small>' + esc(a.email) + '</small></span></button>';
+    }).join("");
+    accHtml += '<button class="sheet-item gc-account-item" data-act="pick-google-another">' +
+      '<span class="avatar sm" style="background:#F1F5F9;color:#475569">' + icon("user") + '</span>' +
+      '<span class="grow"><b>Use another account</b></span></button>';
+
+    var html = '<div class="google-chooser">' +
+      '<div class="gc-header">' + googleIcon(28) +
+      '<h3>Choose an account</h3><p class="muted">to continue to ' + esc(BRAND.name) + '</p></div>' +
+      '<div class="sheet-list gc-accounts">' + accHtml + '</div>' +
+      '<p class="tiny muted gc-disclaimer">To continue, Google will share your name, email address, and language preference with ' + esc(BRAND.name) + '.</p>' +
+      '<button class="btn btn-ghost btn-block btn-sm" data-act="sheet-close" style="margin-top:10px">Cancel</button>' +
+      '</div>';
+    openSheet(html);
+  }
+  window.signInWithGoogle = signInWithGoogle;
+
   // --------------------------------------------------------------- events
   function rerender() { render(true); }
   function onClick(e) {
@@ -629,6 +713,26 @@
     switch (act) {
       case "go": go(el.getAttribute("data-to")); break;
       case "back": if (history.length > 1) history.back(); else go("#home"); break;
+      case "google-signin": signInWithGoogle(); break;
+      case "pick-google-account": {
+        var gName = el.getAttribute("data-name");
+        var gEmail = el.getAttribute("data-email");
+        closeSheet();
+        signInWithGoogle({ name: gName, email: gEmail });
+        break;
+      }
+      case "pick-google-another": {
+        closeSheet();
+        var entered = prompt("Enter Google account email:", "sweta.demo@gmail.com");
+        if (entered && entered.trim()) {
+          var cleanEmail = entered.trim();
+          var rawName = cleanEmail.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, function (l) { return l.toUpperCase(); });
+          signInWithGoogle({ name: rawName, email: cleanEmail });
+        }
+        break;
+      }
+      case "start-phone-onboard":
+        store.authMethod = "phone"; save(); go("#onboard/city"); break;
       case "skip-onboarding": store.onboarded = true; save(); go("#home"); break;
       case "city": store.city = id; save(); rerender(); break;
       case "waitlist": {
@@ -645,11 +749,9 @@
         store.profile.anonDefault = !store.profile.anonDefault; askDraft.anon = null; save();
         el.setAttribute("aria-checked", store.profile.anonDefault); break;
       case "verify-phone":
+        store.authMethod = "phone";
         el.textContent = "Sending…"; el.disabled = true;
         setTimeout(function () { store.verify.phone = true; save(); rerender(); toast("Code 482 913 auto-filled (demo) ✓"); }, 700); break;
-      case "verify-selfie":
-        store.verify.selfie = "checking"; rerender();
-        setTimeout(function () { store.verify.selfie = true; save(); rerender(); }, 1100); break;
       case "finish-onboarding":
         store.onboarded = true; save(); go("#home"); toast("Welcome to the circle, " + store.profile.nickname + " 💛"); break;
       case "react": {
