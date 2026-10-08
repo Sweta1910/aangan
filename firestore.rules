@@ -21,9 +21,15 @@ service cloud.firestore {
                     request.resource.data.get('title', '') is string &&
                     request.resource.data.get('title', '').size() <= 300 &&
                     (request.resource.data.get('anon', false) != true ||
-                     request.resource.data.get('author', null) == null);
+                     request.resource.data.get('author', null) == null) &&
+                    request.resource.data.get('replyCount', 0) == 0;
+      // Any signed-in mom may bump replyCount by exactly +1 when she replies
+      // (client uses updateDoc(increment(1))); no other field may change.
+      allow update: if request.auth != null &&
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['replyCount']) &&
+                    request.resource.data.replyCount == resource.data.get('replyCount', 0) + 1;
       allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
-      
+
       match /replies/{replyId} {
         allow read: if request.auth != null;
         allow create: if request.auth != null && 

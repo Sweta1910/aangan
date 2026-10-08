@@ -66,11 +66,15 @@
   function circle(id) { return byId(D.circles, id); }
   function mom(id) { return byId(D.moms, id); }
   function hood(id) { return byId(D.neighbourhoods, id); }
+  // Firestore createdAt is null on a pending local write (serverTimestamp not yet
+  // resolved); treat anything missing or odd as "just now" rather than throwing.
   function formatTime(t) {
     if (!t) return "just now";
     if (typeof t === "string") return t;
-    if (t.toDate) {
-      var diff = (Date.now() - t.toDate().getTime()) / 60000;
+    if (typeof t.toDate === "function") {
+      var d = t.toDate();
+      if (!d || isNaN(d.getTime())) return "just now";
+      var diff = (Date.now() - d.getTime()) / 60000;
       if (diff < 1) return "just now";
       if (diff < 60) return Math.floor(diff) + "m";
       if (diff < 1440) return Math.floor(diff/60) + "h";
@@ -257,9 +261,11 @@
   }
   function postCard(p, opts) {
     opts = opts || {};
-    var c = circle(p.circle);
-    var name = p.anon ? "Anonymous mom" : p.author;
-    var count = answersFor(p).length;
+    // Firestore posts carry no reactions/answers and may name an unknown circle;
+    // fall back instead of throwing, which would blank the whole feed.
+    var c = circle(p.circle) || D.circles[0];
+    var name = p.anon ? "Anonymous mom" : (p.author || "Mom");
+    var count = (window.Backend && window.Backend.isReal) ? (p.replyCount || 0) : answersFor(p).length;
     return '<article class="card post ' + (opts.full ? "" : "clickable") + '" ' + (opts.full ? "" : 'data-href="#q/' + p.id + '"') + ' id="post-' + p.id + '">' +
       '<div class="post-head">' + avatar(p.anon ? null : p.author, p.hue) +
       '<div class="who"><b>' + esc(name) + "</b><span>" + esc(p.meta) + " · " + esc(p.time) + "</span></div>" +
@@ -268,7 +274,7 @@
       (opts.full ? "" : '<div class="post-tagrow"><a class="tag" style="text-decoration:none" href="#circle/' + c.id + '">' + c.emoji + " " + esc(c.name) + "</a></div>") +
       "<h3>" + esc(p.title) + "</h3>" +
       (p.body ? '<p class="body ' + (opts.full ? "" : "clamp") + '">' + esc(p.body) + "</p>" : "") +
-      '<div class="post-foot">' + reactionBar(p.id, p.reactions) +
+      '<div class="post-foot">' + reactionBar(p.id, p.reactions || {}) +
       (opts.full ? "" : '<span class="replies-count">' + icon("chat") + count + "</span>") +
       "</div></article>";
   }
@@ -446,7 +452,7 @@
     var p = post(id);
     if (!p) return V.home();
     if (replyDraft.pid !== id) replyDraft = { pid: id, text: "", anon: store.profile.anonDefault, nudge: null };
-    var c = circle(p.circle);
+    var c = circle(p.circle) || D.circles[0];
     var ans = answersFor(p).slice().sort(function (a, b) { return (b.expert ? 1 : 0) - (a.expert ? 1 : 0); });
     var list = ans.map(function (a) {
       var name = a.anon ? "Anonymous mom" : a.author;
@@ -734,6 +740,18 @@
     t.textContent = msg; t.classList.add("show");
     clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2600);
   }
+  // Every real-mode Firebase call ends in .catch(failToast(...)): the mom sees what
+  // failed (e.g. "Couldn't post yet (permission-denied)") and the console keeps the
+  // full error for debugging. `btn` (optional) is re-enabled so she can retry.
+  function errCode(e) { return String((e && (e.code || e.message)) || "error").replace(/^(firestore|auth)\//, ""); }
+  function failToast(what, btn) {
+    return function (e) {
+      console.error("Aangan: couldn't " + what, e);
+      if (btn) btn.disabled = false;
+      toast("Couldn't " + what + " yet (" + errCode(e) + "). Please try again.");
+    };
+  }
+  function busy(btn) { if (btn && btn.tagName === "BUTTON") btn.disabled = true; return btn; }
   function openSheet(html) {
     var s = $("#sheet"), b = $("#sheet-backdrop");
     s.innerHTML = html; s.hidden = false; b.hidden = false;
@@ -741,10 +759,8 @@
   }
   function closeSheet() { $("#sheet").hidden = true; $("#sheet-backdrop").hidden = true; }
   function reportSheet(opts) {
-    if (opts.postId) {
-       var s = document.getElementById("sheet");
-       if (s) s.setAttribute("data-pid", opts.postId);
-    }
+    var sheetEl = document.getElementById("sheet");
+    if (sheetEl) { if (opts.postId) sheetEl.setAttribute("data-pid", opts.postId); else sheetEl.removeAttribute("data-pid"); }
     // opts: {title, subject, author, postId, momId}
     var items = '<button class="sheet-item" data-act="report-start" data-label="' + esc(opts.subject) + '">' + icon("flag") + "<span>Report " + esc(opts.subject) + "<small>Unkind, unsafe, spam or not from a mom</small></span></button>";
     if (opts.postId) items += '<button class="sheet-item" data-act="hide-post" data-id="' + opts.postId + '">' + icon("eyeoff") + "<span>Hide this post<small>You won't see it again</small></span></button>";
@@ -776,29 +792,44 @@
    *   3. Firebase SDK scripts / bundle (firebase/app, firebase/auth) initialized with project config.
    * No API keys or external Firebase scripts are loaded in this static prototype.
    */
-  function signInWithGoogle(account) {
+  // Shared by the popup path and the redirect path (getRedirectResult on load).
+  function afterGoogleSignIn(u) {
+    store.authMethod = "google";
+    store.verify.google = true;
+    var firstName = u.displayName ? (u.displayName.split(" ")[0] || u.displayName) : "Mom";
+    store.profile.nickname = firstName;
+    store.profile.fullName = u.displayName || "";
+    store.profile.email = u.email || "";
+    save();
+    return window.Backend.getProfile(u.uid).then(function(p) {
+      if (p) {
+        store.profile = Object.assign(store.profile, p);
+        store.onboarded = true;
+        save();
+        go("#home");
+      } else {
+        toast("Signed in ✓");
+        go("#onboard/city");
+      }
+    }).catch(function (e) {
+      failToast("load your profile", null)(e);
+      go("#onboard/city");
+    });
+  }
+  function signInWithGoogle(account, btn) {
     if (window.Backend && window.Backend.isReal) {
+      busy(btn);
+      // Backend falls back to signInWithRedirect for popup-blocked & co; in that
+      // case the page navigates away and the result lands via getRedirectResult.
       window.Backend.signInWithGoogle().then(function(result) {
-         store.authMethod = "google";
-         store.verify.google = true;
-         var u = result.user;
-         var firstName = u.displayName ? (u.displayName.split(" ")[0] || u.displayName) : "Mom";
-         store.profile.nickname = firstName;
-         store.profile.fullName = u.displayName || "";
-         store.profile.email = u.email || "";
-         save();
-         window.Backend.getProfile(u.uid).then(function(p) {
-           if (p) {
-             store.profile = Object.assign(store.profile, p);
-             store.onboarded = true;
-             save();
-             go("#home");
-           } else {
-             toast("Signed in ✓");
-             go("#onboard/city");
-           }
-         });
-      }).catch(function(e) { toast("Sign in failed"); });
+         if (btn) btn.disabled = false;
+         if (!result || result.redirecting || !result.user) return;
+         return afterGoogleSignIn(result.user);
+      }).catch(function(e) {
+         if (btn) btn.disabled = false;
+         if (e && e.code === "auth/popup-closed-by-user") { toast("Sign-in cancelled"); return; }
+         failToast("sign you in", btn)(e);
+      });
       return;
     }
     if (!account) {
@@ -852,7 +883,7 @@
     switch (act) {
       case "go": go(el.getAttribute("data-to")); break;
       case "back": if (history.length > 1) history.back(); else go("#home"); break;
-      case "google-signin": signInWithGoogle(); break;
+      case "google-signin": signInWithGoogle(undefined, el); break;
       case "pick-google-account": {
         var gName = el.getAttribute("data-name");
         var gEmail = el.getAttribute("data-email");
@@ -894,7 +925,11 @@
       case "finish-onboarding":
         store.onboarded = true; save();
         if (window.Backend && window.Backend.isReal && window.Backend.user) {
-           window.Backend.saveProfile(window.Backend.user.uid, store.profile);
+           busy(el);
+           window.Backend.saveProfile(window.Backend.user.uid, store.profile).then(function () {
+             go("#home"); toast("Welcome to the circle, " + store.profile.nickname + " 💛");
+           }).catch(failToast("save your profile", el));
+           break;
         }
         go("#home"); toast("Welcome to the circle, " + store.profile.nickname + " 💛"); break;
       case "react": {
@@ -925,17 +960,21 @@
         }
         var hits = kindnessScan(textToScan);
         if (hits.length && !askDraft.skipKind) { askDraft.nudge = hits; rerender(); setTimeout(function () { var n = $("#ask-nudge"); if (n) n.scrollIntoView({ behavior: "smooth", block: "center" }); }, 50); break; }
-        var isAnon = askDraft.anon;
+        var isAnon = !!askDraft.anon;
         var authorName = isAnon ? null : store.profile.nickname;
-        var meta = store.profile.stages.length ? "Mom · " + store.profile.stages.join(", ") : "Mom";
+        var stages = store.profile.stages || [];
+        var meta = stages.length ? "Mom · " + stages.join(", ") : "Mom";
         var cId = askDraft.circle;
-        var cn = circle(cId).name;
+        var cn = (circle(cId) || { name: "the circle" }).name;
         
-        if (window.Backend && window.Backend.isReal && window.Backend.user) {
+        if (window.Backend && window.Backend.isReal) {
+          if (!window.Backend.user) { toast("Please sign in to post"); go("#welcome"); break; }
+          if (askDraft.saving) break;
+          askDraft.saving = true; busy(el);
           window.Backend.addPost(window.Backend.user.uid, authorName, isAnon, cId, askDraft.title.trim(), askDraft.body.trim(), meta, D.me.hue).then(function(docRef) {
             askDraft = { circle: null, title: "", body: "", anon: null, nudge: null };
             go("#q/" + docRef.id); toast("Posted to " + cn + " 💛");
-          });
+          }).catch(function (e) { askDraft.saving = false; failToast("post", el)(e); });
           break;
         }
 
@@ -976,6 +1015,20 @@
         var rh = kindnessScan(txt);
         if (rh.length && !replyDraft.skipKind) { replyDraft.nudge = rh; rerender(); setTimeout(function () { var s = $("#screen"); s.scrollTop = s.scrollHeight; }, 30); break; }
         var pid = replyDraft.pid;
+        if (window.Backend && window.Backend.isReal) {
+          // Real mode previously wrote replies to localStorage only, so nobody else
+          // ever saw them. Now they go to Firestore and the listener re-renders.
+          if (!window.Backend.user) { toast("Please sign in to reply"); go("#welcome"); break; }
+          if (replyDraft.saving) break;
+          replyDraft.saving = true; busy(el);
+          var rAnon = !!replyDraft.anon;
+          window.Backend.addReply(pid, window.Backend.user.uid, rAnon ? null : store.profile.nickname, rAnon, txt, D.me.hue).then(function () {
+            replyDraft.saving = false; replyDraft.text = ""; replyDraft.nudge = null; rerender();
+            setTimeout(function () { var s = $("#screen"); s.scrollTop = s.scrollHeight; }, 30);
+            toast("Reply posted 💛");
+          }).catch(function (e) { replyDraft.saving = false; failToast("post your reply", el)(e); });
+          break;
+        }
         (store.answers[pid] = store.answers[pid] || []).push({ id: "ua" + Date.now(), anon: replyDraft.anon, author: replyDraft.anon ? null : store.profile.nickname, hue: D.me.hue, time: "now", body: txt, reactions: {} });
         save(); replyDraft.text = ""; replyDraft.nudge = null; rerender();
         setTimeout(function () { var s = $("#screen"); s.scrollTop = s.scrollHeight; }, 30);
@@ -1016,9 +1069,14 @@
           reasons.map(function (r) { return '<button class="sheet-item" data-act="report-done">' + icon("flag") + "<span>" + r + "</span></button>"; }).join("") + "</div>");
         break;
       }
-      case "report-done": 
+      case "report-done":
         if (window.Backend && window.Backend.isReal && window.Backend.user) {
-           window.Backend.addReport(document.getElementById("sheet").getAttribute("data-pid") || "unknown", "reported", window.Backend.user.uid);
+           var reason = (el.textContent || "reported").trim();
+           busy(el);
+           window.Backend.addReport(document.getElementById("sheet").getAttribute("data-pid") || "unknown", reason, window.Backend.user.uid).then(function () {
+             closeSheet(); toast("Thanks — a moderator will review within 24h");
+           }).catch(failToast("send your report", el));
+           break;
         }
         closeSheet(); toast("Thanks — a moderator will review within 24h"); break;
       case "sign-out":
@@ -1026,7 +1084,7 @@
            window.Backend.signOut().then(function() {
              localStorage.removeItem(STORE_KEY); store = freshStore();
              go("#welcome"); toast("Signed out");
-           });
+           }).catch(failToast("sign you out", null));
         }
         break;
       case "hide-post": store.hidden.push(id); save(); closeSheet(); go("#home"); toast("Post hidden"); break;
@@ -1115,13 +1173,48 @@
       "<small>Clickable prototype · mock data only · all people are fictional</small>";
   }
 
+  // "Demo mode" badge. Shown ONLY once Backend.ready has resolved with isReal
+  // false: Backend.isReal is false while the Firebase SDK is still loading, so
+  // checking it at DOMContentLoaded labelled real mode as demo.
+  function showDemoLabel() {
+    if (document.getElementById("demo-label")) return;
+    var d = document.createElement("div");
+    d.id = "demo-label";
+    d.innerHTML = "Demo mode";
+    d.style = "position:fixed;bottom:env(safe-area-inset-bottom, 5px);right:5px;font-size:10px;background:rgba(0,0,0,0.5);color:#fff;padding:2px 6px;border-radius:4px;z-index:9999;pointer-events:none;";
+    document.body.appendChild(d);
+  }
+
+  // Firestore listeners. Rules require sign-in to read, and an onSnapshot error
+  // kills the listener permanently, so we (re)subscribe on every sign-in and tear
+  // down on sign-out instead of subscribing once at load.
+  function syncReplies() {
+    var B = window.Backend;
+    if (!B || !B.isReal) return;
+    var r = parseHash();
+    if (B._unsubReplies) { B._unsubReplies(); B._unsubReplies = null; }
+    B._currentReplies = [];
+    if (r.name !== "q" || !r.arg || !B.user) return;
+    B._unsubReplies = B.listenReplies(r.arg, function(reps) {
+      B._currentReplies = reps;
+      if (parseHash().name === "q" && parseHash().arg === r.arg) rerender();
+    }, failToast("load replies", null));
+  }
+  function syncPosts() {
+    var B = window.Backend;
+    if (B._unsubPosts) { B._unsubPosts(); B._unsubPosts = null; }
+    if (!B.user) { B.posts = []; return; }
+    B._unsubPosts = B.listenPosts("all", function(posts) {
+      var r = parseHash();
+      var had = r.name === "q" && (B.posts || []).some(function (p) { return p.id === r.arg; });
+      B.posts = posts;
+      // On #q only re-render when the post first shows up (direct link / just
+      // posted); otherwise a feed update would wipe focus while she types a reply.
+      if (r.name === "home" || r.name === "circle" || (r.name === "q" && !had)) rerender();
+    }, failToast("load posts", null));
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
-    if (!window.Backend || !window.Backend.isReal) {
-      var d = document.createElement("div");
-      d.innerHTML = "Demo mode";
-      d.style = "position:fixed;bottom:env(safe-area-inset-bottom, 5px);right:5px;font-size:10px;background:rgba(0,0,0,0.5);color:#fff;padding:2px 6px;border-radius:4px;z-index:9999;pointer-events:none;";
-      document.body.appendChild(d);
-    }
     var app = $("#app");
     app.addEventListener("click", onClick);
     app.addEventListener("input", onInput);
@@ -1129,43 +1222,42 @@
     $("#sheet-backdrop").addEventListener("click", closeSheet);
     window.addEventListener("hashchange", function () { 
       closeSheet(); 
-      if (window.Backend && window.Backend.isReal) {
-        var r = parseHash();
-        if (r.name === "q" && r.arg) {
-          if (window.Backend._unsubReplies) window.Backend._unsubReplies();
-          window.Backend._unsubReplies = window.Backend.listenReplies(r.arg, function(reps) {
-            window.Backend._currentReplies = reps;
-            if (parseHash().name === "q" && parseHash().arg === r.arg) render();
-          });
-        }
-      }
+      syncReplies();
       render(); 
     });
     showcase();
     if (window.Backend && window.Backend.ready) {
       window.Backend.ready.then(function() {
         if (window.Backend.isReal) {
+          // Coming back from a signInWithRedirect fallback: finish sign-in here.
+          window.Backend.getRedirectResult().then(function (result) {
+            if (result && result.user) return afterGoogleSignIn(result.user);
+          }).catch(function (e) {
+            failToast("sign you in", null)(e);
+          });
           window.Backend.onAuth(function(u) {
             window.Backend.user = u;
+            syncPosts();
+            syncReplies();
             if (u) {
                window.Backend.getProfile(u.uid).then(function(p) {
                  if (p) { store.profile = Object.assign(store.profile || {}, p); store.onboarded = true; }
+                 render();
+               }).catch(function (e) {
+                 failToast("load your profile", null)(e);
                  render();
                });
             } else {
                render();
             }
           });
-          // Also listen to posts globally
-          window.Backend.listenPosts("all", function(posts) {
-             window.Backend.posts = posts;
-             if (location.hash === "#home" || !location.hash) render();
-          });
         } else {
+          showDemoLabel();
           render();
         }
       });
     } else {
+      showDemoLabel();
       render();
     }
   });

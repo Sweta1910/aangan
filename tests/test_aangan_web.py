@@ -269,5 +269,91 @@ class TestData(unittest.TestCase):
         js = _read("app.js")
         self.assertIn('var authorName = isAnon ? null : store.profile.nickname;', js)
 
+
+class TestRealModeHardening(unittest.TestCase):
+    """Real (Firebase) mode used to fail silently: un-caught promises, undefined
+    Firestore fields, a premature "Demo mode" badge. These pin the fixes."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = _read("app.js")
+        cls.backend = _read("backend.js")
+        with open(os.path.join(APP_DIR, "firestore.rules"), encoding="utf-8") as f:
+            cls.rules = f.read()
+
+    def _calls(self, name):
+        return [m.start() for m in re.finditer(r"Backend\.%s\(" % name, self.app)]
+
+    def test_every_backend_write_and_profile_read_is_caught(self):
+        for name in ("addPost", "addReply", "addReport", "saveProfile", "getProfile", "signOut", "getRedirectResult"):
+            calls = self._calls(name)
+            self.assertTrue(calls, "app.js never calls Backend.%s" % name)
+            for start in calls:
+                # The promise chain for each call must end in a .catch within the
+                # same statement block (before the next `break;` or 1500 chars).
+                window = self.app[start:start + 1500]
+                end = window.find("break;")
+                if end > 0:
+                    window = window[:end]
+                self.assertIn(".catch(", window, "Backend.%s call at %d has no .catch" % (name, start))
+
+    def test_fail_toast_shows_code_and_logs(self):
+        self.assertIn("function failToast(", self.app)
+        self.assertIn("console.error(", self.app)
+        self.assertIn("Please try again.", self.app)
+        self.assertIn("function busy(", self.app)
+
+    def test_demo_label_only_after_ready(self):
+        boot = self.app[self.app.index('document.addEventListener("DOMContentLoaded"'):]
+        ready = boot.index("Backend.ready.then(")
+        first_label = boot.index("showDemoLabel()")
+        self.assertGreater(first_label, ready, "Demo label must wait for Backend.ready")
+        self.assertNotIn('d.innerHTML = "Demo mode"', boot, "label must come from showDemoLabel, not inline at load")
+
+    def test_posting_requires_sign_in_in_real_mode(self):
+        self.assertIn("Please sign in to post", self.app)
+        self.assertIn("var isAnon = !!askDraft.anon;", self.app)
+        self.assertIn("store.profile.stages || []", self.app)
+
+    def test_addpost_never_writes_undefined(self):
+        self.assertIn("!!isAnon", self.backend)
+        self.assertIn("function plain(", self.backend)
+        for field in ("title: str(title", "body: str(body", "meta: str(meta", "hue: str(hue"):
+            self.assertIn(field, self.backend)
+
+    def test_redirect_sign_in_fallback(self):
+        for code in ("auth/popup-blocked", "auth/operation-not-supported-in-this-environment",
+                     "auth/cancelled-popup-request"):
+            self.assertIn(code, self.backend)
+        self.assertIn("signInWithRedirect(auth, provider)", self.backend)
+        self.assertIn("fbGetRedirectResult(auth)", self.backend)
+        self.assertIn("Backend.getRedirectResult()", self.app)
+
+    def test_reply_count_increment_allowed_by_rules(self):
+        self.assertIn("replyCount: increment(1)", self.backend)
+        self.assertIn("allow update:", self.rules)
+        self.assertIn("affectedKeys().hasOnly(['replyCount'])", self.rules)
+        self.assertIn("p.replyCount || 0", self.app)
+        self.assertIn("match /replies/{replyId}", self.rules)
+
+    def test_null_created_at_and_missing_fields_render(self):
+        self.assertIn('if (!t) return "just now";', self.app)
+        self.assertIn('serverTimestamps: "estimate"', self.backend)
+        self.assertIn("reactionBar(p.id, p.reactions || {})", self.app)
+        self.assertIn("circle(p.circle) || D.circles[0]", self.app)
+
+    def test_listeners_have_error_callbacks_and_wait_for_sign_in(self):
+        self.assertEqual(self.backend.count("onSnapshot(q, function(snap)"), 2)
+        self.assertEqual(self.backend.count("if (onError) onError(e);"), 2)
+        self.assertIn("if (!B.user) { B.posts = []; return; }", self.app)
+
+    def test_backend_js_syntax_with_node_if_available(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node not installed")
+        r = subprocess.run([node, "--check", os.path.join(WEB_DIR, "backend.js")], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
