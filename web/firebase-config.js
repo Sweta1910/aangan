@@ -1,14 +1,18 @@
 // web/firebase-config.js
-// Setup instructions:
-// 1. Go to Firebase Console and create a new project.
-// 2. Add a Web App to the project.
-// 3. Copy the configuration object they give you into window.FIREBASE_CONFIG below.
-// Note: The web apiKey is NOT a secret. Security comes from Firestore rules and authorized domains.
+// Aangan's Firebase web config (project "aangan-6a58c", created by Sweta on her
+// personal Google account, 2026-10-08).
+//
+// The web apiKey is NOT a secret: every Firebase web app ships it to the browser.
+// Security comes from firestore.rules (published in the Firebase console) and the
+// Authentication -> Authorized domains list (sweta1910.github.io, localhost).
+//
+// To go back to demo mode (fictional data, pretend sign-in), empty this object.
 window.FIREBASE_CONFIG = {
-  // apiKey: "PASTE_API_KEY_HERE",
-  // authDomain: "PASTE_AUTH_DOMAIN_HERE",
-  // projectId: "PASTE_PROJECT_ID_HERE",
-  // storageBucket: "PASTE_STORAGE_BUCKET_HERE",
-  // messagingSenderId: "PASTE_MESSAGING_SENDER_ID_HERE",
-  // appId: "PASTE_APP_ID_HERE"
+  apiKey: "AIzaSyADm5t223W8GYug5-PimWs_y3A-wyjAiPs",
+  authDomain: "aangan-6a58c.firebaseapp.com",
+  projectId: "aangan-6a58c",
+  storageBucket: "aangan-6a58c.firebasestorage.app",
+  messagingSenderId: "566884559911",
+  appId: "1:566884559911:web:99c914234a9eba96eeb202",
+  measurementId: "G-RGYJM0Q6WR"
 };

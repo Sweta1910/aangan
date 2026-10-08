@@ -242,11 +242,15 @@ class TestData(unittest.TestCase):
         self.assertIn('@media (min-width: 1200px)', css, "Must have right-rail breakpoint")
 
 
-    def test_firebase_config_exists_and_empty(self):
+    def test_firebase_config_is_wellformed(self):
+        # The real web config is committed on purpose: Firebase web apiKeys are
+        # public by design; access is controlled by firestore.rules + authorized domains.
         js = _read("firebase-config.js")
         self.assertIn('window.FIREBASE_CONFIG', js)
-        self.assertNotIn('"AIza', js, "No real api key should be checked in")
-        self.assertIn('PASTE_API_KEY_HERE', js)
+        self.assertNotIn('PASTE_', js, "placeholders must be replaced by the real config")
+        for key in ("apiKey", "authDomain", "projectId", "appId"):
+            self.assertRegex(js, r'\b%s:\s*"[^"]+"' % key)
+        self.assertIn('aangan-6a58c.firebaseapp.com', js)
 
     def test_backend_demo_mode_guard(self):
         js = _read("backend.js")
