@@ -69,9 +69,9 @@ class TestShell(unittest.TestCase):
             self.assertNotIn("showcase", p.ids)
             self.assertNotIn("phone", p.ids)
             self.assertIn(needed, p.ids)
-        self.assertEqual(p.scripts, ["data.js", "firebase-config.js", "backend.js", "app.js"], "scripts must load in correct order")
+        self.assertEqual([s.split("?")[0] for s in p.scripts], ["data.js", "firebase-config.js", "backend.js", "app.js"], "scripts must load in correct order")
         for ref in p.scripts + p.styles:
-            self.assertTrue(os.path.exists(os.path.join(WEB_DIR, ref)), ref)
+            self.assertTrue(os.path.exists(os.path.join(WEB_DIR, ref.split("?")[0])), ref)
 
     def test_viewport_and_description_meta(self):
         src = _read("index.html")
@@ -357,3 +357,8 @@ class TestRealModeHardening(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_cache_busting_present(self):
+        html = (self.web / "index.html").read_text()
+        self.assertRegex(html, r'src="app\.js\?v=[\da-f]{7}"')
+        self.assertRegex(html, r'src="backend\.js\?v=[\da-f]{7}"')
