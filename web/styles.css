@@ -79,14 +79,14 @@
   .topbar, .backbar {
     background: rgba(255, 255, 255, .96); /* blend with screen bg */
   }
-  /* Onboarding / Centered cards on soft background */
-  .view:has(.welcome), .view:has(.ob), .view:has(.optin) {
+  /* Nearby Opt-in Card inside desktop screen */
+  .view:has(.optin) {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 40px;
+    padding: 40px 20px;
   }
-  .welcome, .ob, .optin {
+  .optin {
     background: var(--paper);
     border-radius: 32px;
     box-shadow: var(--shadow-2);
@@ -94,9 +94,118 @@
     max-width: 480px;
     width: 100%;
     padding: 32px;
+  }
+  
+  /* Onboarding / Pre-Auth Mode overrides (Full screen, no rail) */
+  .app.onboarding-mode {
+    display: flex;
+    flex-direction: column;
+    background: radial-gradient(120% 60% at 100% 0%, rgba(248, 212, 187, .55), transparent 60%),
+                radial-gradient(90% 50% at 0% 100%, rgba(224, 238, 235, .7), transparent 60%),
+                var(--cream);
+  }
+  .app.onboarding-mode .tabbar, .app.onboarding-mode .right-rail {
+    display: none !important;
+  }
+  .app.onboarding-mode .screen {
+    flex: 1;
+    max-width: 100%;
+    margin: 0;
+    border: none;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .app.onboarding-mode .view {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    min-height: auto;
+  }
+  
+  /* Regular onboarding steps as a centred card */
+  .app.onboarding-mode .ob, .app.onboarding-mode .google-chooser {
+    background: var(--paper);
+    border-radius: 32px;
+    box-shadow: var(--shadow-2);
+    min-height: auto;
+    max-width: 440px;
+    width: 100%;
+    padding: 40px;
     border: 1px solid var(--line);
   }
-  .welcome .toran { margin: -32px -32px 0 -32px; border-radius: 32px 32px 0 0; }
+  .app.onboarding-mode .google-chooser {
+    padding: 32px;
+  }
+
+  /* Two-column welcome. Grid, not flex: the markup has three siblings
+     (.welcome-hero, .promise, .welcome-cta), and a flex row squeezed them into
+     three narrow columns. The hero and the promise cards share the left column
+     (stacked); the sign-in card sits in the right column across both rows. */
+  .app.onboarding-mode .welcome {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    grid-template-rows: auto auto;
+    column-gap: 64px;
+    row-gap: 0;
+    max-width: 1040px;
+    width: 100%;
+    align-items: center;
+    padding: 0;
+  }
+  .app.onboarding-mode .welcome-hero {
+    margin-top: 0;
+    grid-column: 1;
+    grid-row: 1;
+    align-self: end;
+  }
+  .app.onboarding-mode .welcome .promise {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+    max-width: 520px;
+    margin-top: 26px;
+  }
+  .app.onboarding-mode .welcome-cta {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+  .app.onboarding-mode .welcome .mandala {
+    top: -100px;
+    right: auto;
+    left: -100px;
+    width: 500px;
+    height: 500px;
+    opacity: 0.1;
+  }
+  .app.onboarding-mode .welcome-cta {
+    width: 400px;
+    background: var(--paper);
+    border-radius: 32px;
+    box-shadow: var(--shadow-2);
+    padding: 40px;
+    border: 1px solid var(--line);
+    flex: none;
+    margin-top: 0;
+  }
+  .app.onboarding-mode .welcome-cta-header {
+    display: block;
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .app.onboarding-mode .welcome-cta-header h3 {
+    font-size: 24px;
+    margin-bottom: 4px;
+  }
+  .app.onboarding-mode .welcome-cta-header p {
+    font-size: 14px;
+    color: var(--ink-2);
+  }
+  .app.onboarding-mode .toran {
+    display: none;
+  }
 }
 
 @media (min-width: 1200px) {
@@ -334,6 +443,7 @@ p { margin: 0; }
 .promise-row b { display: block; font-size: 14.5px; }
 .promise-row div span { font-size: 13px; color: var(--ink-2); }
 .welcome-cta { margin-top: auto; padding-top: 18px; display: grid; gap: 8px; }
+.welcome-cta-header { display: none; }
 .welcome-cta .tiny { text-align: center; }
 .auth-divider { display: flex; align-items: center; gap: 12px; color: var(--ink-3); font-size: 13px; font-weight: 500; margin: 2px 0; }
 .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }

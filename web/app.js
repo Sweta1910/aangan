@@ -241,6 +241,7 @@
       promiseRow("📍", "var(--teal-soft)", "Moms near you", "Starting in Mountain View & Sunnyvale") +
       "</div>" +
       '<div class="welcome-cta">' +
+      '<div class="welcome-cta-header"><h3>Join the circle</h3><p>Women-only · Safe · Verified</p></div>' +
       '<button class="btn btn-google btn-block" data-act="google-signin" id="google-signin">' + googleIcon(18) + "<span>Continue with Google</span></button>" +
       '<div class="auth-divider"><span>or</span></div>' +
       '<button class="btn btn-primary btn-block" data-act="start-phone-onboard" id="get-started">Continue with phone</button>' +
@@ -607,7 +608,12 @@
     var tabbar = $("#tabbar");
     var dtLogo = $("#dt-logo");
     if (dtLogo) dtLogo.innerHTML = logoMark() + '<span class="logo-word" style="font-size:22px">' + esc(BRAND.name) + '</span>';
-    tabbar.hidden = out.tab === null && ["chats"].indexOf(r.name) < 0;
+    var isPreAuth = out.tab === null || ["onboard/city", "onboard/about", "onboard/verify"].indexOf(r.name) >= 0 || r.name === "welcome";
+    var app = $("#app");
+    if (app) app.classList.toggle("onboarding-mode", isPreAuth);
+    document.body.setAttribute("data-view", r.name);
+
+    tabbar.hidden = isPreAuth && ["chats"].indexOf(r.name) < 0;
     var tabLinks = $("#tab-links") || tabbar;
     tabLinks.innerHTML = TABS.map(function (t) {
       var cur = out.tab === t.id ? ' aria-current="page"' : "";
@@ -618,7 +624,7 @@
     
     var rightRail = $("#right-rail");
     if (rightRail) {
-      if (out.tab === null || ["onboard/city", "onboard/about", "onboard/verify"].indexOf(r.name) >= 0 || r.name === "welcome") {
+      if (isPreAuth) {
         rightRail.hidden = true;
       } else {
         rightRail.hidden = false;

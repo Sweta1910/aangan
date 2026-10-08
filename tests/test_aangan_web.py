@@ -221,6 +221,8 @@ class TestData(unittest.TestCase):
         self.assertNotIn('.phone {', css)
         self.assertNotIn('.showcase {', css)
         self.assertIn('@media (min-width: 900px)', css, "Must have desktop breakpoint")
+        self.assertIn('.app.onboarding-mode', css, "Must have desktop overrides for onboarding mode")
+        self.assertIn('.app.onboarding-mode .welcome {', css, "Must style desktop welcome container")
         self.assertIn('@media (min-width: 1200px)', css, "Must have right-rail breakpoint")
 
 if __name__ == "__main__":
