@@ -66,13 +66,44 @@
   function circle(id) { return byId(D.circles, id); }
   function mom(id) { return byId(D.moms, id); }
   function hood(id) { return byId(D.neighbourhoods, id); }
+  function formatTime(t) {
+    if (!t) return "just now";
+    if (typeof t === "string") return t;
+    if (t.toDate) {
+      var diff = (Date.now() - t.toDate().getTime()) / 60000;
+      if (diff < 1) return "just now";
+      if (diff < 60) return Math.floor(diff) + "m";
+      if (diff < 1440) return Math.floor(diff/60) + "h";
+      return Math.floor(diff/1440) + "d";
+    }
+    return "now";
+  }
+
   function allPosts() {
+    if (window.Backend && window.Backend.isReal) {
+       return (window.Backend.posts || []).filter(function (p) {
+         p.time = formatTime(p.createdAt);
+         return store.hidden.indexOf(p.id) < 0 && !(p.author && store.blocked.indexOf(p.author) >= 0);
+       });
+    }
     return store.posts.concat(D.posts).filter(function (p) {
       return store.hidden.indexOf(p.id) < 0 && !(p.author && store.blocked.indexOf(p.author) >= 0);
     });
   }
-  function post(id) { return byId(store.posts.concat(D.posts), id); }
+  function post(id) {
+    if (window.Backend && window.Backend.isReal) {
+      var arr = window.Backend.posts || [];
+      for (var i=0; i<arr.length; i++) if (arr[i].id === id) { arr[i].time = formatTime(arr[i].createdAt); return arr[i]; }
+      return null;
+    }
+    return byId(store.posts.concat(D.posts), id);
+  }
   function answersFor(p) {
+    if (window.Backend && window.Backend.isReal) {
+      var list = window.Backend._currentReplies || [];
+      list.forEach(function(a) { a.time = formatTime(a.createdAt); });
+      return list.filter(function (a) { return !(a.author && store.blocked.indexOf(a.author) >= 0); });
+    }
     var list = (p.answers || []).concat(store.answers[p.id] || []);
     return list.filter(function (a) { return !(a.author && store.blocked.indexOf(a.author) >= 0); });
   }
@@ -370,7 +401,7 @@
       '<div class="circles-row">' + circles + "</div></div>" +
       '<div class="kind-banner"><span class="kb-i">💛</span><div><b>A kind space, always</b><span>Supportive reactions only — no downvotes, no shaming.</span></div></div>' +
       '<div class="section-head" style="padding:0 18px"><h2>Fresh today</h2><span class="muted">' + allPosts().length + " posts</span></div>" +
-      '<div class="feed">' + feed + "</div></div>" };
+      '<div class="feed">' + (feed || '<div style="text-align:center;padding:40px 20px;color:var(--text-muted)">Be the first to share. You\'re not alone.</div>') + "</div></div>" };
   };
 
   V.circle = function (id) {
@@ -401,7 +432,7 @@
       '<div class="field"><label for="ask-title">Your question</label><input class="input" id="ask-title" data-input="ask-title" maxlength="140" placeholder="e.g. How did you handle the first week of daycare?" value="' + esc(askDraft.title) + '"></div>' +
       '<div class="field"><label for="ask-body">Add details <span class="tiny">(optional)</span></label><textarea class="input" id="ask-body" data-input="ask-body" maxlength="1200" placeholder="Share as much or as little as you like. This is a safe space.">' + esc(askDraft.body) + "</textarea>" +
       '<p class="demo-link">✨ <button class="link" data-act="ask-demo" id="kindness-demo">See the kindness check in action</button></p></div>' +
-      '<div class="card toggle-row" style="margin-top:16px"><div class="grow"><b>Post anonymously</b><span>' + (askDraft.anon ? 'Shown as "Anonymous mom" — even we hide your nickname' : "Shown as " + esc(store.profile.nickname)) + "</span></div>" + switchEl(askDraft.anon, "ask-anon", "Post anonymously") + "</div>" +
+      '<div class="card toggle-row" style="margin-top:16px"><div class="grow"><b>Post anonymously</b><span>' + (askDraft.anon ? 'Hidden from other moms. Aangan\'s moderators can see who posted, for safety.' : "Shown as " + esc(store.profile.nickname)) + "</span></div>" + switchEl(askDraft.anon, "ask-anon", "Post anonymously") + "</div>" +
       '<div class="anon-preview">' + avatar(askDraft.anon ? null : store.profile.nickname, D.me.hue, "sm") + "<span>Posting as <b>" + (askDraft.anon ? "Anonymous mom" : esc(store.profile.nickname)) + "</b></span></div>" +
       '<div id="ask-nudge-slot">' + (askDraft.nudge ? nudgeHtml(askDraft.body || askDraft.title, askDraft.nudge, "ask") : "") + "</div>" +
       '<div style="margin-top:18px"><button class="btn btn-primary btn-block" data-act="ask-post" id="ask-post"' + (canPost ? "" : " disabled") + ">Post question</button></div>" +
@@ -623,7 +654,9 @@
       '<a class="link-row" href="#safety" style="text-decoration:none;color:inherit">' + icon("shield") + '<span class="grow">Safety centre & crisis lines</span>' + icon("chevron") + "</a></div></div>" +
       '<div class="settings-group"><h3>Account</h3><div class="card">' +
       '<button class="link-row" data-act="go" data-to="#onboard/city">' + icon("pin") + '<span class="grow">City</span><span class="tiny">' + esc(c.name) + "</span>" + icon("chevron") + "</button>" +
-      '<button class="link-row" data-act="reset" id="reset-demo">' + icon("reset") + '<span class="grow">Reset demo</span>' + icon("chevron") + "</button></div></div>" +
+      ((window.Backend && window.Backend.isReal) ? 
+        '<button class="link-row" data-act="sign-out" id="sign-out">' + icon("reset") + '<span class="grow">Sign out</span>' + icon("chevron") + "</button></div></div>" :
+        '<button class="link-row" data-act="reset" id="reset-demo">' + icon("reset") + '<span class="grow">Reset demo</span>' + icon("chevron") + "</button></div></div>") +
       '<p class="footer-note">' + esc(BRAND.name) + " prototype · v0.1 · all data is fictional</p></div>" };
   };
 
@@ -708,6 +741,10 @@
   }
   function closeSheet() { $("#sheet").hidden = true; $("#sheet-backdrop").hidden = true; }
   function reportSheet(opts) {
+    if (opts.postId) {
+       var s = document.getElementById("sheet");
+       if (s) s.setAttribute("data-pid", opts.postId);
+    }
     // opts: {title, subject, author, postId, momId}
     var items = '<button class="sheet-item" data-act="report-start" data-label="' + esc(opts.subject) + '">' + icon("flag") + "<span>Report " + esc(opts.subject) + "<small>Unkind, unsafe, spam or not from a mom</small></span></button>";
     if (opts.postId) items += '<button class="sheet-item" data-act="hide-post" data-id="' + opts.postId + '">' + icon("eyeoff") + "<span>Hide this post<small>You won't see it again</small></span></button>";
@@ -740,6 +777,30 @@
    * No API keys or external Firebase scripts are loaded in this static prototype.
    */
   function signInWithGoogle(account) {
+    if (window.Backend && window.Backend.isReal) {
+      window.Backend.signInWithGoogle().then(function(result) {
+         store.authMethod = "google";
+         store.verify.google = true;
+         var u = result.user;
+         var firstName = u.displayName ? (u.displayName.split(" ")[0] || u.displayName) : "Mom";
+         store.profile.nickname = firstName;
+         store.profile.fullName = u.displayName || "";
+         store.profile.email = u.email || "";
+         save();
+         window.Backend.getProfile(u.uid).then(function(p) {
+           if (p) {
+             store.profile = Object.assign(store.profile, p);
+             store.onboarded = true;
+             save();
+             go("#home");
+           } else {
+             toast("Signed in ✓");
+             go("#onboard/city");
+           }
+         });
+      }).catch(function(e) { toast("Sign in failed"); });
+      return;
+    }
     if (!account) {
       openGoogleChooser();
       return;
@@ -831,7 +892,11 @@
         el.textContent = "Sending…"; el.disabled = true;
         setTimeout(function () { store.verify.phone = true; save(); rerender(); toast("Code 482 913 auto-filled (demo) ✓"); }, 700); break;
       case "finish-onboarding":
-        store.onboarded = true; save(); go("#home"); toast("Welcome to the circle, " + store.profile.nickname + " 💛"); break;
+        store.onboarded = true; save();
+        if (window.Backend && window.Backend.isReal && window.Backend.user) {
+           window.Backend.saveProfile(window.Backend.user.uid, store.profile);
+        }
+        go("#home"); toast("Welcome to the circle, " + store.profile.nickname + " 💛"); break;
       case "react": {
         var key = el.getAttribute("data-key") + ":" + el.getAttribute("data-r");
         if (store.reacted[key]) delete store.reacted[key]; else store.reacted[key] = true;
@@ -860,11 +925,24 @@
         }
         var hits = kindnessScan(textToScan);
         if (hits.length && !askDraft.skipKind) { askDraft.nudge = hits; rerender(); setTimeout(function () { var n = $("#ask-nudge"); if (n) n.scrollIntoView({ behavior: "smooth", block: "center" }); }, 50); break; }
-        var p = { id: "u" + Date.now(), circle: askDraft.circle, anon: askDraft.anon, author: askDraft.anon ? null : store.profile.nickname, hue: D.me.hue,
-          meta: store.profile.stages.length ? "Mom · " + store.profile.stages.join(", ") : "Mom", time: "now", title: askDraft.title.trim(), body: askDraft.body.trim(),
+        var isAnon = askDraft.anon;
+        var authorName = isAnon ? null : store.profile.nickname;
+        var meta = store.profile.stages.length ? "Mom · " + store.profile.stages.join(", ") : "Mom";
+        var cId = askDraft.circle;
+        var cn = circle(cId).name;
+        
+        if (window.Backend && window.Backend.isReal && window.Backend.user) {
+          window.Backend.addPost(window.Backend.user.uid, authorName, isAnon, cId, askDraft.title.trim(), askDraft.body.trim(), meta, D.me.hue).then(function(docRef) {
+            askDraft = { circle: null, title: "", body: "", anon: null, nudge: null };
+            go("#q/" + docRef.id); toast("Posted to " + cn + " 💛");
+          });
+          break;
+        }
+
+        var p = { id: "u" + Date.now(), circle: cId, anon: isAnon, author: authorName, hue: D.me.hue,
+          meta: meta, time: "now", title: askDraft.title.trim(), body: askDraft.body.trim(),
           reactions: { hug: 0, been: 0, helpful: 0 }, answers: [] };
         store.posts.unshift(p); save();
-        var cn = circle(p.circle).name;
         askDraft = { circle: null, title: "", body: "", anon: null, nudge: null };
         go("#q/" + p.id); toast("Posted to " + cn + " 💛"); break;
       }
@@ -938,7 +1016,19 @@
           reasons.map(function (r) { return '<button class="sheet-item" data-act="report-done">' + icon("flag") + "<span>" + r + "</span></button>"; }).join("") + "</div>");
         break;
       }
-      case "report-done": closeSheet(); toast("Thanks — a moderator will review within 24h"); break;
+      case "report-done": 
+        if (window.Backend && window.Backend.isReal && window.Backend.user) {
+           window.Backend.addReport(document.getElementById("sheet").getAttribute("data-pid") || "unknown", "reported", window.Backend.user.uid);
+        }
+        closeSheet(); toast("Thanks — a moderator will review within 24h"); break;
+      case "sign-out":
+        if (window.Backend && window.Backend.isReal) {
+           window.Backend.signOut().then(function() {
+             localStorage.removeItem(STORE_KEY); store = freshStore();
+             go("#welcome"); toast("Signed out");
+           });
+        }
+        break;
       case "hide-post": store.hidden.push(id); save(); closeSheet(); go("#home"); toast("Post hidden"); break;
       case "block": {
         var who = el.getAttribute("data-who"), nm = el.getAttribute("data-name");
@@ -1026,14 +1116,58 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
+    if (!window.Backend || !window.Backend.isReal) {
+      var d = document.createElement("div");
+      d.innerHTML = "Demo mode";
+      d.style = "position:fixed;bottom:env(safe-area-inset-bottom, 5px);right:5px;font-size:10px;background:rgba(0,0,0,0.5);color:#fff;padding:2px 6px;border-radius:4px;z-index:9999;pointer-events:none;";
+      document.body.appendChild(d);
+    }
     var app = $("#app");
     app.addEventListener("click", onClick);
     app.addEventListener("input", onInput);
     document.addEventListener("keydown", onKey);
     $("#sheet-backdrop").addEventListener("click", closeSheet);
-    window.addEventListener("hashchange", function () { closeSheet(); render(); });
+    window.addEventListener("hashchange", function () { 
+      closeSheet(); 
+      if (window.Backend && window.Backend.isReal) {
+        var r = parseHash();
+        if (r.name === "q" && r.arg) {
+          if (window.Backend._unsubReplies) window.Backend._unsubReplies();
+          window.Backend._unsubReplies = window.Backend.listenReplies(r.arg, function(reps) {
+            window.Backend._currentReplies = reps;
+            if (parseHash().name === "q" && parseHash().arg === r.arg) render();
+          });
+        }
+      }
+      render(); 
+    });
     showcase();
-    render();
+    if (window.Backend && window.Backend.ready) {
+      window.Backend.ready.then(function() {
+        if (window.Backend.isReal) {
+          window.Backend.onAuth(function(u) {
+            window.Backend.user = u;
+            if (u) {
+               window.Backend.getProfile(u.uid).then(function(p) {
+                 if (p) { store.profile = Object.assign(store.profile || {}, p); store.onboarded = true; }
+                 render();
+               });
+            } else {
+               render();
+            }
+          });
+          // Also listen to posts globally
+          window.Backend.listenPosts("all", function(posts) {
+             window.Backend.posts = posts;
+             if (location.hash === "#home" || !location.hash) render();
+          });
+        } else {
+          render();
+        }
+      });
+    } else {
+      render();
+    }
   });
 
   // Exposed for tests/screenshot tooling only.

@@ -69,7 +69,7 @@ class TestShell(unittest.TestCase):
             self.assertNotIn("showcase", p.ids)
             self.assertNotIn("phone", p.ids)
             self.assertIn(needed, p.ids)
-        self.assertEqual(p.scripts, ["data.js", "app.js"], "data.js must load before app.js")
+        self.assertEqual(p.scripts, ["data.js", "firebase-config.js", "backend.js", "app.js"], "scripts must load in correct order")
         for ref in p.scripts + p.styles:
             self.assertTrue(os.path.exists(os.path.join(WEB_DIR, ref)), ref)
 
@@ -240,6 +240,30 @@ class TestData(unittest.TestCase):
         self.assertIn('.app.onboarding-mode', css, "Must have desktop overrides for onboarding mode")
         self.assertIn('.app.onboarding-mode .welcome {', css, "Must style desktop welcome container")
         self.assertIn('@media (min-width: 1200px)', css, "Must have right-rail breakpoint")
+
+
+    def test_firebase_config_exists_and_empty(self):
+        js = _read("firebase-config.js")
+        self.assertIn('window.FIREBASE_CONFIG', js)
+        self.assertNotIn('"AIza', js, "No real api key should be checked in")
+        self.assertIn('PASTE_API_KEY_HERE', js)
+
+    def test_backend_demo_mode_guard(self):
+        js = _read("backend.js")
+        self.assertIn('window.FIREBASE_CONFIG.apiKey', js)
+        self.assertIn('PASTE', js)
+        self.assertIn('isReal = false', js)
+
+    def test_firestore_rules(self):
+        with open(os.path.join(os.path.dirname(WEB_DIR), "firestore.rules")) as f:
+            rules = f.read()
+        self.assertIn("allow read, write: if false;", rules)
+        self.assertIn("request.auth.uid == uid", rules)
+        self.assertIn("resource.data.uid == request.auth.uid", rules)
+
+    def test_anon_posts_no_author_name(self):
+        js = _read("app.js")
+        self.assertIn('var authorName = isAnon ? null : store.profile.nickname;', js)
 
 if __name__ == "__main__":
     unittest.main()

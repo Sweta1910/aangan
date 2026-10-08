@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    match /profiles/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+    
+    match /posts/{postId} {
+      allow read: if request.auth != null;
+      // Anonymous posts must not carry an author name, enforced here as well as in
+      // the client, so a modified client can't leak a mom's name on an anon post.
+      allow create: if request.auth != null && 
+                    request.resource.data.uid == request.auth.uid &&
+                    request.resource.data.body is string &&
+                    request.resource.data.body.size() <= 4000 &&
+                    request.resource.data.get('title', '') is string &&
+                    request.resource.data.get('title', '').size() <= 300 &&
+                    (request.resource.data.get('anon', false) != true ||
+                     request.resource.data.get('author', null) == null);
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      
+      match /replies/{replyId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && 
+                      request.resource.data.uid == request.auth.uid &&
+                      request.resource.data.body is string &&
+                      request.resource.data.body.size() <= 4000 &&
+                      (request.resource.data.get('anon', false) != true ||
+                       request.resource.data.get('author', null) == null);
+        allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      }
+    }
+    
+    // Reports are create-only and unreadable by clients; the reporter can't be forged.
+    match /reports/{reportId} {
+      allow create: if request.auth != null &&
+                    request.resource.data.reporterUid == request.auth.uid;
+      allow read: if false;
+    }
+  }
+}
