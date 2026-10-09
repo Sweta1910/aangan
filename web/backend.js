@@ -37,7 +37,9 @@
     listenReports: null,
     deleteReport: null,
     getPost: null,
-    removePost: null
+    removePost: null,
+    setReaction: null,
+    listenMyReactions: null
   };
 
   // Popup failures that mean "this browser can't do popups", not "the mom said no".
@@ -265,6 +267,47 @@
           return batch.commit();
         });
       };
+
+      // ---- Reactions (see the long comment in firestore.rules). One batch writes
+      // BOTH her marker /userReactions/{uid}/marks/{markId} and the +-1 on the
+      // post's (or reply's) reactions.{r} counter; rules accept each half only
+      // alongside the other, so the count can't drift or be stuffed. Firestore's
+      // latency compensation fires every listener at once with the pending write
+      // (instant feedback) and rolls it back automatically if the commit is denied.
+      // markId: "<postId>_<r>" or "<postId>_<replyId>_<r>" (auto ids have no "_").
+      Backend.markId = function(postId, replyId, r) {
+        return replyId ? postId + "_" + replyId + "_" + r : postId + "_" + r;
+      };
+      Backend.setReaction = function(uid, postId, replyId, r, on) {
+        var markRef = doc(db, "userReactions", uid, "marks", Backend.markId(postId, replyId, r));
+        var target = replyId ? doc(db, "posts", postId, "replies", replyId) : doc(db, "posts", postId);
+        var batch = writeBatch(db);
+        if (on) batch.set(markRef, { post: postId, reply: replyId || null, r: r, at: serverTimestamp() });
+        else batch.delete(markRef);
+        var bump = {};
+        bump["reactions." + r] = increment(on ? 1 : -1);
+        batch.update(target, bump);
+        return batch.commit();
+      };
+      // Her own markers -> cb({ "<postId>:<r>" | "<postId>/<replyId>:<r>": true }),
+      // the same key shape app.js uses for reaction buttons (data-key + ":" + r).
+      Backend.listenMyReactions = function(uid, cb, onError) {
+        return onSnapshot(collection(db, "userReactions", uid, "marks"), function(snap) {
+          var mine = {};
+          snap.forEach(function(d) {
+            var m = d.data();
+            if (!m || typeof m.post !== "string" || typeof m.r !== "string") return;
+            mine[(m.reply ? m.post + "/" + m.reply : m.post) + ":" + m.r] = true;
+          });
+          cb(mine);
+        }, function(e) {
+          console.error("listenMyReactions failed", e);
+          if (onError) onError(e);
+        });
+      };
+      // Test hook (emulator rules checks in the two-user harness); grants nothing
+      // beyond what the page could already do -- firestore.rules is the gate.
+      Backend._fs = modules[2];
 
     }).catch(function(e) {
       console.error("Firebase load failed, demo mode fallback", e);

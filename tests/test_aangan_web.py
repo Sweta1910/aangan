@@ -420,7 +420,7 @@ class TestRealModeHardening(unittest.TestCase):
     def test_listeners_have_error_callbacks_and_wait_for_sign_in(self):
         # posts, replies, reports: every listener has an error callback.
         self.assertEqual(self.backend.count("onSnapshot(q, function(snap)"), 3)
-        self.assertEqual(self.backend.count("if (onError) onError(e);"), 3)
+        self.assertEqual(self.backend.count("if (onError) onError(e);"), 4)  # posts, replies, reports, my reactions
         self.assertIn("if (!B.user) { B.posts = []; return; }", self.app)
 
     def test_posts_and_replies_listeners_self_heal_without_polling(self):
@@ -805,6 +805,101 @@ ok(boot({ isReal: false }, { onboarded: true, city: ' Delhi ' }).city() === 'Del
   ok(calls.length === 1, 'must not write a city-only profile before onboarding finishes');
   console.log('OK');
 })().catch(e => { console.error(e.message); process.exit(1); });
+""" % WEB_DIR
+        r = subprocess.run([node, "-e", harness], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("OK", r.stdout)
+
+
+class TestSharedReactions(unittest.TestCase):
+    """2026-10-09: reactions were localStorage-only, so other moms never saw a hug.
+    Real mode now writes a per-mom marker + a +-1 counter in one batch; rules make
+    each half depend on the other. These pin the shape; the two-user emulator run
+    (state/scratch/aangan_e2e/reactions_e2e.py in Liquid) proves it live."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = _read("app.js")
+        cls.backend = _read("backend.js")
+        with open(os.path.join(APP_DIR, "firestore.rules"), encoding="utf-8") as f:
+            cls.rules = f.read()
+
+    def test_backend_writes_marker_and_counter_in_one_batch(self):
+        i = self.backend.index("Backend.setReaction = function")
+        body = self.backend[i:self.backend.index("\n      };", i)]
+        for s in ('"userReactions", uid, "marks"', "writeBatch(db)", "batch.set(markRef", "batch.delete(markRef)",
+                  '"reactions." + r', "increment(on ? 1 : -1)", "batch.commit()"):
+            self.assertIn(s, body, s)
+        self.assertIn("Backend.listenMyReactions = function", self.backend)
+
+    def test_rules_cross_check_marker_and_counter(self):
+        r = self.rules
+        self.assertIn("match /userReactions/{uid}/marks/{markId}", r)
+        self.assertIn("function reactionIds() { return ['hug', 'been', 'helpful']; }", r)
+        self.assertIn("na == nb + 1 && !exists(mark) && existsAfter(mark)", r)
+        self.assertIn("na == nb - 1 && nb > 0 && exists(mark) && !existsAfter(mark)", r)
+        self.assertIn("counterMoved(request.resource.data, 1)", r)
+        self.assertIn("counterMoved(resource.data, -1)", r)
+        self.assertIn("/userReactions/$(request.auth.uid)/marks/", r)  # never someone else's marker
+        self.assertIn("allow update: if reactionBump(postId + '_' + replyId);", r)
+        self.assertNotIn("toList()", r)  # not a Set method; the emulator warns and the rule never matches
+        # New posts/replies can't be created with pre-stuffed counts.
+        self.assertEqual(r.count("!('reactions' in request.resource.data)"), 2)
+        # Markers are never edited in place and only their owner reads them.
+        block = r[r.index("match /userReactions/{uid}/marks/{markId}"):]
+        block = block[:block.index("\n    }")]
+        self.assertNotIn("allow update", block)
+        self.assertNotIn("allow write", block)
+
+    def test_click_routes_real_mode_to_firestore_with_guard_and_rollback(self):
+        self.assertIn('if (isRealMode()) { reactLive(el); break; }', self.app)
+        i = self.app.index("function reactLive(el)")
+        body = self.app[i:self.app.index("\n  }\n", i)]
+        self.assertIn("if (reactState.pending[k] !== undefined) return;", body)  # double-tap guard
+        self.assertIn("B.setReaction(uid, pid, rid, r, want)", body)
+        self.assertIn("cache(!want)", body)  # rollback
+        self.assertIn('failToast("save your reaction", null)(e)', body)
+
+    def test_live_updates_patch_instead_of_rerender(self):
+        self.assertIn("function patchReactions()", self.app)
+        self.assertIn("if (same) patchReactions(); else rerender();", self.app)  # replies
+        self.assertIn("else patchReactions();", self.app)  # posts
+        self.assertIn("syncMarks();", self.app)
+        self.assertIn("resetReactions();", self.app)
+        self.assertIn('healListener("marks", "load your reactions", true)', self.app)
+
+    def test_rendered_counts_demo_vs_real(self):
+        node = _node()
+        if not node:
+            self.skipTest("node not installed")
+        harness = r"""
+const fs = require('fs'), path = require('path'), vm = require('vm');
+const webDir = %r;
+const dataJs = fs.readFileSync(path.join(webDir, 'data.js'), 'utf8');
+const appJs = fs.readFileSync(path.join(webDir, 'app.js'), 'utf8');
+function boot(backend, seed) {
+  const ls = { store: {}, getItem(k) { return this.store[k] || null; }, setItem(k, v) { this.store[k] = v; }, removeItem(k) { delete this.store[k]; } };
+  if (seed) ls.store['aangan.demo.v1'] = JSON.stringify(seed);
+  const w = { location: { hash: '#home', search: '', hostname: 'localhost' }, localStorage: ls,
+    document: { addEventListener() {}, querySelector() { return null; }, getElementById() { return null; }, body: { setAttribute() {} } },
+    Backend: backend, console: console, setTimeout: setTimeout, clearTimeout: clearTimeout };
+  w.window = w;
+  vm.runInContext(dataJs, vm.createContext(w)); vm.runInContext(appJs, w);
+  return w.AANGAN;
+}
+function ok(c, msg) { if (!c) throw new Error(msg); }
+const post = { id: 'x1', title: 'T', body: 'b', meta: 'Mom', hue: 'teal', replyCount: 0, reactions: { hug: 3 } };
+// Real: shared count as stored (hers already included), pressed from her cached marker.
+let h = boot({ isReal: true, user: { uid: 'u1' }, posts: [post] }, { onboarded: true, reactedLive: { 'x1:hug': true }, reactedLiveUid: 'u1' }).V.home().html;
+ok(h.includes('aria-pressed="true" aria-label="Hug (3)"'), 'real pressed+shared count: ' + h);
+ok(h.includes('aria-label="Been there (0)"'), 'real missing id = 0');
+// Another mom's cache never marks this mom's button.
+h = boot({ isReal: true, user: { uid: 'u2' }, posts: [post] }, { onboarded: true, reactedLive: { 'x1:hug': true }, reactedLiveUid: 'u1' }).V.home().html;
+ok(h.includes('aria-pressed="false" aria-label="Hug (3)"'), 'other uid cache leaked: ' + h);
+// Demo keeps local behaviour: fictional count + her toggle.
+h = boot({ isReal: false }, { onboarded: true, reacted: { 'ppf1:hug': true } }).V.home().html;
+ok(/aria-pressed="true" aria-label="Hug \(25\)"/.test(h), 'demo +1: ' + h);
+console.log('OK');
 """ % WEB_DIR
         r = subprocess.run([node, "-e", harness], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)

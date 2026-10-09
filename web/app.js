@@ -11,6 +11,10 @@
  * the visitor does (posts, reactions, RSVPs, hi-requests, chats, privacy
  * settings) is kept in `store` and persisted to localStorage so a demo survives
  * a refresh. "Reset demo" on the Me tab clears it.
+ *
+ * Real mode (Firebase, see backend.js): posts, replies and reactions live in
+ * Firestore and every signed-in mom sees them live. Reaction counts are shared
+ * counters on each post/reply; her own pressed state is her Firestore markers.
  */
 (function () {
   "use strict";
@@ -33,7 +37,11 @@
       msgPolicy: "mutual",
       posts: [],          // posts created in this demo session
       answers: {},        // postId -> [answers created in this demo]
-      reacted: {},        // "p1:hug" | "p1/a2:helpful" -> true
+      reacted: {},        // DEMO mode: "p1:hug" | "p1/a2:helpful" -> true
+      // REAL mode: optimistic cache of HER Firestore markers (same key shape), so
+      // pressed state paints before listenMyReactions answers. Firestore wins.
+      reactedLive: {},
+      reactedLiveUid: null,
       rsvp: {},           // eventId -> true
       req: {},            // momId -> "pending" | "accepted"
       chats: {},          // momId -> [messages]
@@ -313,17 +321,60 @@
   }
 
   // ---------------------------------------------------------- components
+  // Reactions. DEMO mode: counts are fictional data.js numbers + her local toggle.
+  // REAL mode (2026-10-09, "other moms don't see my hug"): counts are the shared
+  // reactions.{r} counters on the Firestore post/reply doc (they already include
+  // her own reaction), and pressed state comes from her Firestore markers. See
+  // Backend.setReaction and the reactions block in firestore.rules.
+  var reactState = { mine: null, pending: {} }; // mine: markers from Firestore (null = not loaded yet); pending: key -> wanted state while a write is in flight
+  function isReacted(k) {
+    if (!isRealMode()) return !!store.reacted[k];
+    if (reactState.pending[k] !== undefined) return reactState.pending[k];
+    if (reactState.mine) return !!reactState.mine[k];
+    var B = window.Backend;
+    return !!(B.user && store.reactedLiveUid === B.user.uid && store.reactedLive[k]);
+  }
+  function reactCount(counts, r, on) {
+    if (isRealMode()) return Math.max(0, +(counts || {})[r.id] || 0);
+    return ((counts || {})[r.id] || 0) + (on ? 1 : 0);
+  }
+  function reactBtnInner(r, n) { return '<span class="e">' + r.emoji + "</span>" + r.label + (n ? " · " + n : ""); }
   function reactionBar(key, counts) {
     return D.reactions.map(function (r) {
-      var on = !!store.reacted[key + ":" + r.id];
-      var n = (counts[r.id] || 0) + (on ? 1 : 0);
+      var on = isReacted(key + ":" + r.id);
+      var n = reactCount(counts, r, on);
       return '<button class="react" data-act="react" data-key="' + key + '" data-r="' + r.id + '" aria-pressed="' + on + '" aria-label="' + r.label + " (" + n + ')">' +
-        '<span class="e">' + r.emoji + "</span>" + r.label + (n ? " · " + n : "") + "</button>";
+        reactBtnInner(r, n) + "</button>";
     }).join("");
+  }
+  // Counts for a reaction-bar key: "<postId>" or "<postId>/<replyId>" (real mode).
+  function liveCountsFor(key) {
+    var i = key.indexOf("/");
+    if (i < 0) { var p = post(key); return (p && p.reactions) || {}; }
+    var rid = key.slice(i + 1), reps = window.Backend._currentReplies || [];
+    for (var j = 0; j < reps.length; j++) if (reps[j].id === rid) return reps[j].reactions || {};
+    return {};
+  }
+  // Minimal DOM patch: rewrites only reaction buttons whose state changed, so a
+  // live update never re-renders the screen (open reply draft, focus and scroll
+  // stay exactly as they were). Real mode only; demo buttons patch themselves.
+  function patchReactions() {
+    if (!isRealMode()) return;
+    var screen = $("#screen"); if (!screen) return;
+    var btns = screen.querySelectorAll(".react[data-key]");
+    var byR = {}; D.reactions.forEach(function (r) { byR[r.id] = r; });
+    for (var i = 0; i < btns.length; i++) {
+      var b = btns[i], key = b.getAttribute("data-key"), r = byR[b.getAttribute("data-r")];
+      if (!r) continue;
+      var on = isReacted(key + ":" + r.id), n = reactCount(liveCountsFor(key), r, on);
+      var label = r.label + " (" + n + ")";
+      if (b.getAttribute("aria-pressed") !== String(on)) b.setAttribute("aria-pressed", on);
+      if (b.getAttribute("aria-label") !== label) { b.setAttribute("aria-label", label); b.innerHTML = reactBtnInner(r, n); }
+    }
   }
   function postCard(p, opts) {
     opts = opts || {};
-    // Firestore posts carry no reactions/answers and may name an unknown circle;
+    // Firestore posts may have no reactions map yet and may name an unknown circle;
     // fall back instead of throwing, which would blank the whole feed.
     var c = p.circle ? circle(p.circle) : null;
     var name = p.anon ? "Anonymous mom" : (p.author || "Mom");
@@ -1100,6 +1151,7 @@
         }
         go("#home"); toast("Welcome to the circle, " + store.profile.nickname + " 💛"); break;
       case "react": {
+        if (isRealMode()) { reactLive(el); break; }
         var key = el.getAttribute("data-key") + ":" + el.getAttribute("data-r");
         if (store.reacted[key]) delete store.reacted[key]; else store.reacted[key] = true;
         save();
@@ -1409,13 +1461,15 @@
   // backoff (2s, 4s ... 60s), and immediately when the tab becomes visible again or
   // the browser comes back online. This is NOT polling: while a listener is healthy
   // nothing runs; Firestore pushes changes over its one open stream.
-  var live = { postsDead: false, repliesDead: false, retry: 0, timer: null };
-  function healListener(kind, what) {
+  var live = { postsDead: false, repliesDead: false, marksDead: false, retry: 0, timer: null, postsSig: null, repliesSig: null };
+  // quiet: no toast (her markers only drive pressed state; the cache covers a miss).
+  function healListener(kind, what, quiet) {
     return function (e) {
       var B = window.Backend;
       if (kind === "posts") { B._unsubPosts = null; live.postsDead = true; }
+      else if (kind === "marks") { B._unsubMarks = null; live.marksDead = true; }
       else { B._unsubReplies = null; live.repliesDead = true; }
-      if (live.retry === 0) failToast(what, null)(e);
+      if (live.retry === 0 && !quiet) failToast(what, null)(e);
       else console.error("MomSakhi: listener failed again (" + kind + ")", e);
       var wait = Math.min(60000, 2000 * Math.pow(2, live.retry++));
       clearTimeout(live.timer);
@@ -1427,6 +1481,16 @@
     if (!B || !B.isReal || !B.user) return;
     if (live.postsDead) syncPosts();
     if (live.repliesDead) syncReplies();
+    if (live.marksDead) syncMarks();
+  }
+  // Snapshot "shape" minus reaction counts: equal before/after means only
+  // reactions moved, so patchReactions() is enough and nothing re-renders.
+  function contentSig(list) {
+    try {
+      return JSON.stringify((list || []).map(function (d) {
+        var c = {}; for (var k in d) if (k !== "reactions" && k !== "time") c[k] = d[k]; return c;
+      }));
+    } catch (e) { return "x" + Math.random(); }
   }
   function syncReplies() {
     var B = window.Backend;
@@ -1435,12 +1499,61 @@
     if (B._unsubReplies) { B._unsubReplies(); B._unsubReplies = null; }
     B._currentReplies = [];
     live.repliesDead = false;
+    live.repliesSig = null;
     if (r.name !== "q" || !r.arg || !B.user) return;
     B._unsubReplies = B.listenReplies(r.arg, function(reps) {
       live.retry = 0;
+      var sig = contentSig(reps), same = sig === live.repliesSig;
+      live.repliesSig = sig;
       B._currentReplies = reps;
-      if (parseHash().name === "q" && parseHash().arg === r.arg) rerender();
+      if (parseHash().name === "q" && parseHash().arg === r.arg) { if (same) patchReactions(); else rerender(); }
     }, healListener("replies", "load replies"));
+  }
+  // Her own reaction markers (pressed state on every device). Re-attached on every
+  // auth change; resetReactions() drops the previous mom's state first.
+  function resetReactions() { reactState.mine = null; reactState.pending = {}; }
+  function syncMarks() {
+    var B = window.Backend;
+    if (B._unsubMarks) { B._unsubMarks(); B._unsubMarks = null; }
+    live.marksDead = false;
+    if (!B.user || !B.listenMyReactions) return;
+    var uid = B.user.uid;
+    B._unsubMarks = B.listenMyReactions(uid, function (mine) {
+      live.retry = 0;
+      if (!B.user || B.user.uid !== uid) return;
+      reactState.mine = mine;
+      store.reactedLive = Object.assign({}, mine); store.reactedLiveUid = uid; save();
+      patchReactions();
+    }, healListener("marks", "load your reactions", true));
+  }
+  // Tap on a reaction in real mode. One write per button at a time (double taps
+  // while it is in flight are ignored); the button flips at once (optimistic),
+  // Firestore's latency compensation moves the count at once, and a denied or
+  // failed write flips both back and tells her why.
+  function reactLive(el) {
+    var B = window.Backend;
+    var bk = el.getAttribute("data-key"), r = el.getAttribute("data-r"), k = bk + ":" + r;
+    if (!B.user || !B.setReaction) { toast("Sign in with Google to react 💛"); return; }
+    if (reactState.pending[k] !== undefined) return;
+    var want = !isReacted(k), uid = B.user.uid;
+    var i = bk.indexOf("/"), pid = i < 0 ? bk : bk.slice(0, i), rid = i < 0 ? null : bk.slice(i + 1);
+    function cache(v) {
+      if (store.reactedLiveUid !== uid) { store.reactedLive = {}; store.reactedLiveUid = uid; }
+      if (v) store.reactedLive[k] = true; else delete store.reactedLive[k];
+      save();
+    }
+    reactState.pending[k] = want; cache(want); patchReactions();
+    if (want) { el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); }
+    var done = false;
+    B.setReaction(uid, pid, rid, r, want).then(function () {
+      done = true; delete reactState.pending[k]; patchReactions();
+    }, function (e) {
+      if (done) return;
+      delete reactState.pending[k]; cache(!want);
+      if (reactState.mine) { if (want) delete reactState.mine[k]; else reactState.mine[k] = true; }
+      patchReactions();
+      failToast("save your reaction", null)(e);
+    });
   }
   // Re-evaluated on every auth change: drop the old listener/flag first so a
   // signed-out or different user never sees the previous moderator's queue.
@@ -1464,15 +1577,21 @@
     var B = window.Backend;
     if (B._unsubPosts) { B._unsubPosts(); B._unsubPosts = null; }
     live.postsDead = false;
+    live.postsSig = null;
     if (!B.user) { B.posts = []; return; }
     B._unsubPosts = B.listenPosts("all", function(posts) {
       live.retry = 0;
       var r = parseHash();
       var had = r.name === "q" && (B.posts || []).some(function (p) { return p.id === r.arg; });
+      var sig = contentSig(posts), same = sig === live.postsSig;
+      live.postsSig = sig;
       B.posts = posts;
       // On #q only re-render when the post first shows up (direct link / just
       // posted); otherwise a feed update would wipe focus while she types a reply.
-      if (r.name === "home" || r.name === "circle" || (r.name === "q" && !had)) rerender();
+      // A reactions-only change (same sig) never re-renders: patchReactions().
+      if ((r.name === "home" || r.name === "circle") && !same) rerender();
+      else if (r.name === "q" && !had) rerender();
+      else patchReactions();
     }, healListener("posts", "load posts"));
   }
 
@@ -1502,8 +1621,10 @@
           });
           window.Backend.onAuth(function(u) {
             window.Backend.user = u;
+            resetReactions();
             syncPosts();
             syncReplies();
+            syncMarks();
             syncModerator(u);
             if (u) {
                window.Backend.getProfile(u.uid).then(function(p) {

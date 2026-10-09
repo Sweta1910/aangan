@@ -8,6 +8,59 @@ service cloud.firestore {
              exists(/databases/$(database)/documents/moderators/$(request.auth.uid));
     }
 
+    // ---- Reactions (hug / been there / helpful), added 2026-10-09.
+    // Two halves written in ONE batch by Backend.setReaction() in web/backend.js:
+    //   1. a marker /userReactions/{uid}/marks/{markId} meaning "this mom pressed
+    //      reaction r here" (markId = postId_r, or postId_replyId_r for a reply);
+    //   2. the public counter reactions.{r} on the post (or reply) doc, +1 or -1.
+    // Each half is only allowed when the OTHER half happens in the same write, so a
+    // mom reacts at most once per reaction per post/reply, can only take back her
+    // own reaction, and can never move a count by more than 1 or on someone else's
+    // behalf (the marker path is always built from request.auth.uid).
+    function reactionIds() { return ['hug', 'been', 'helpful']; }
+    function myMark(markId) {
+      return /databases/$(database)/documents/userReactions/$(request.auth.uid)/marks/$(markId);
+    }
+    // Counter side: only `reactions` changes, exactly one known reaction id moves
+    // by exactly +1 (and her marker appears) or -1 (and her marker disappears).
+    function reactionBump(markPrefix) {
+      let before = resource.data.get('reactions', {});
+      let after = request.resource.data.get('reactions', {});
+      let changed = after.diff(before).affectedKeys();
+      // A rules Set can't be indexed, so name the (single) changed id explicitly.
+      let r = changed.hasAny(['hug']) ? 'hug'
+            : (changed.hasAny(['been']) ? 'been'
+            : (changed.hasAny(['helpful']) ? 'helpful' : '-'));
+      let nb = before.get(r, 0);
+      let na = after.get(r, 0);
+      let mark = myMark(markPrefix + '_' + r);
+      return request.auth != null &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) &&
+             after.keys().hasOnly(reactionIds()) &&
+             changed.size() == 1 && r in reactionIds() &&
+             ((na == nb + 1 && !exists(mark) && existsAfter(mark)) ||
+              (na == nb - 1 && nb > 0 && exists(mark) && !existsAfter(mark)));
+    }
+    // Marker side: the post/reply a marker points at, and "its counter for r moved
+    // by exactly d in this same write".
+    function markTarget(m) {
+      return m.get('reply', null) == null
+        ? /databases/$(database)/documents/posts/$(m.post)
+        : /databases/$(database)/documents/posts/$(m.post)/replies/$(m.reply);
+    }
+    function counterMoved(m, d) {
+      return getAfter(markTarget(m)).data.get('reactions', {}).get(m.r, 0) ==
+             get(markTarget(m)).data.get('reactions', {}).get(m.r, 0) + d;
+    }
+    function validMark(markId, m) {
+      return m.keys().hasOnly(['post', 'reply', 'r', 'at']) &&
+             m.post is string && m.r in reactionIds() &&
+             (m.get('reply', null) == null || m.reply is string) &&
+             m.at == request.time &&
+             markId == (m.get('reply', null) == null ? m.post + '_' + m.r
+                                                     : m.post + '_' + m.reply + '_' + m.r);
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
@@ -22,11 +75,23 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == uid;
     }
+
+    // A mom's own reaction markers: only she can read them (so her pressed state is
+    // right on every device) and only she can add/remove them -- never edit one.
+    match /userReactions/{uid}/marks/{markId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid &&
+                    validMark(markId, request.resource.data) &&
+                    counterMoved(request.resource.data, 1);
+      allow delete: if request.auth != null && request.auth.uid == uid &&
+                    counterMoved(resource.data, -1);
+    }
     
     match /posts/{postId} {
       allow read: if request.auth != null;
       // Anonymous posts must not carry an author name, enforced here as well as in
       // the client, so a modified client can't leak a mom's name on an anon post.
+      // New posts start with no reaction counts (they only move via reactionBump).
       allow create: if request.auth != null && 
                     request.resource.data.uid == request.auth.uid &&
                     request.resource.data.body is string &&
@@ -35,12 +100,15 @@ service cloud.firestore {
                     request.resource.data.get('title', '').size() <= 300 &&
                     (request.resource.data.get('anon', false) != true ||
                      request.resource.data.get('author', null) == null) &&
-                    request.resource.data.get('replyCount', 0) == 0;
+                    request.resource.data.get('replyCount', 0) == 0 &&
+                    !('reactions' in request.resource.data);
       // Any signed-in mom may bump replyCount by exactly +1 when she replies
       // (client uses updateDoc(increment(1))); no other field may change.
-      allow update: if request.auth != null &&
+      // The other allowed update: one reaction count +-1 together with her marker.
+      allow update: if (request.auth != null &&
                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['replyCount']) &&
-                    request.resource.data.replyCount == resource.data.get('replyCount', 0) + 1;
+                    request.resource.data.replyCount == resource.data.get('replyCount', 0) + 1) ||
+                    reactionBump(postId);
       // The author may delete her own post; a moderator may delete any post.
       allow delete: if request.auth != null && (isModerator() || resource.data.uid == request.auth.uid);
 
@@ -51,7 +119,10 @@ service cloud.firestore {
                       request.resource.data.body is string &&
                       request.resource.data.body.size() <= 4000 &&
                       (request.resource.data.get('anon', false) != true ||
-                       request.resource.data.get('author', null) == null);
+                       request.resource.data.get('author', null) == null) &&
+                      !('reactions' in request.resource.data);
+        // Replies are never edited; the only update is one reaction count +-1.
+        allow update: if reactionBump(postId + '_' + replyId);
         allow delete: if request.auth != null && (isModerator() || resource.data.uid == request.auth.uid);
       }
     }
