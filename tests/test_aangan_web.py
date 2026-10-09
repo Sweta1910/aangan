@@ -82,6 +82,10 @@ class TestShell(unittest.TestCase):
         html = _read("index.html")
         self.assertRegex(html, r'src="app\.js\?v=[\da-f]{7}"')
         self.assertRegex(html, r'src="backend\.js\?v=[\da-f]{7}"')
+        # styles.css is versioned too (layout fixes must not hide behind a cached CSS),
+        # and every asset carries the SAME version so one bump refreshes everything.
+        self.assertRegex(html, r'href="styles\.css\?v=[\da-f]{7}"')
+        self.assertEqual(len(set(re.findall(r'\?v=([\da-f]{7})"', html))), 1)
 
     def test_js_syntax_with_node_if_available(self):
         node = shutil.which("node")
