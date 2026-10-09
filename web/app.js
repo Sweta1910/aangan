@@ -760,8 +760,13 @@
     var dtLogo = $("#dt-logo");
     if (dtLogo) dtLogo.innerHTML = logoMark() + '<span class="logo-word" style="font-size:22px">' + esc(BRAND.name) + '</span>';
     var isPreAuth = out.tab === null || ["onboard/city", "onboard/about", "onboard/verify"].indexOf(r.name) >= 0 || r.name === "welcome";
+    // The centred "onboarding-mode" layout is for welcome + onboarding steps ONLY.
+    // Other tab-less views (#q/<id>, #chat/<id>, #chats) used to inherit it, which on
+    // laptop widths laid the post, replies and reply box out side-by-side in one row
+    // (found in the 2026-10-09 two-user emulator test).
+    var isOnboarding = r.name === "welcome" || r.name.indexOf("onboard/") === 0;
     var app = $("#app");
-    if (app) app.classList.toggle("onboarding-mode", isPreAuth);
+    if (app) app.classList.toggle("onboarding-mode", isOnboarding);
     document.body.setAttribute("data-view", r.name);
 
     tabbar.hidden = isPreAuth && ["chats"].indexOf(r.name) < 0;

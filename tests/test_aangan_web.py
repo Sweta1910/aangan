@@ -293,6 +293,14 @@ class TestData(unittest.TestCase):
         r = subprocess.run([node, "-e", harness], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
+    def test_onboarding_layout_only_on_onboarding_routes(self):
+        # Post/chat pages (tab: null) must not get the centred welcome layout,
+        # which squashed a post + replies into one row on laptops.
+        js = _read("app.js")
+        self.assertIn('var isOnboarding = r.name === "welcome" || r.name.indexOf("onboard/") === 0;', js)
+        self.assertIn('app.classList.toggle("onboarding-mode", isOnboarding)', js)
+        self.assertNotIn('app.classList.toggle("onboarding-mode", isPreAuth)', js)
+
     def test_firestore_rules(self):
         with open(os.path.join(os.path.dirname(WEB_DIR), "firestore.rules")) as f:
             rules = f.read()
