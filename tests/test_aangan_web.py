@@ -406,6 +406,19 @@ class TestRealModeHardening(unittest.TestCase):
         self.assertEqual(self.backend.count("if (onError) onError(e);"), 3)
         self.assertIn("if (!B.user) { B.posts = []; return; }", self.app)
 
+    def test_posts_and_replies_listeners_self_heal_without_polling(self):
+        # A dead onSnapshot listener used to freeze the feed until reload.
+        self.assertIn('healListener("posts", "load posts")', self.app)
+        self.assertIn('healListener("replies", "load replies")', self.app)
+        self.assertNotIn('failToast("load posts", null));', self.app)
+        self.assertIn("Math.min(60000, 2000 * Math.pow(2, live.retry++))", self.app)
+        self.assertIn('window.addEventListener("online", reviveListeners);', self.app)
+        self.assertIn("if (!document.hidden) reviveListeners();", self.app)
+        self.assertNotIn("setInterval(", self.app)  # no polling
+        # one listener per view: the old one is always torn down before re-attaching
+        self.assertIn("if (B._unsubPosts) { B._unsubPosts(); B._unsubPosts = null; }", self.app)
+        self.assertIn("if (B._unsubReplies) { B._unsubReplies(); B._unsubReplies = null; }", self.app)
+
     def test_circle_optional_when_posting(self):
         # canPost check only needs title > 4 chars, circle is optional
         self.assertIn("var canPost = askDraft.title.trim().length > 4;", self.app)

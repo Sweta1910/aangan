@@ -1303,17 +1303,45 @@
   // Firestore listeners. Rules require sign-in to read, and an onSnapshot error
   // kills the listener permanently, so we (re)subscribe on every sign-in and tear
   // down on sign-out instead of subscribing once at load.
+  //
+  // Self-healing (2026-10-09, "the other mom has to reload to see a new post"):
+  // an onSnapshot error used to just show a toast, leaving the feed frozen until a
+  // reload. Now a failed listener is marked dead and re-attached once after a
+  // backoff (2s, 4s ... 60s), and immediately when the tab becomes visible again or
+  // the browser comes back online. This is NOT polling: while a listener is healthy
+  // nothing runs; Firestore pushes changes over its one open stream.
+  var live = { postsDead: false, repliesDead: false, retry: 0, timer: null };
+  function healListener(kind, what) {
+    return function (e) {
+      var B = window.Backend;
+      if (kind === "posts") { B._unsubPosts = null; live.postsDead = true; }
+      else { B._unsubReplies = null; live.repliesDead = true; }
+      if (live.retry === 0) failToast(what, null)(e);
+      else console.error("Aangan: listener failed again (" + kind + ")", e);
+      var wait = Math.min(60000, 2000 * Math.pow(2, live.retry++));
+      clearTimeout(live.timer);
+      live.timer = setTimeout(reviveListeners, wait);
+    };
+  }
+  function reviveListeners() {
+    var B = window.Backend;
+    if (!B || !B.isReal || !B.user) return;
+    if (live.postsDead) syncPosts();
+    if (live.repliesDead) syncReplies();
+  }
   function syncReplies() {
     var B = window.Backend;
     if (!B || !B.isReal) return;
     var r = parseHash();
     if (B._unsubReplies) { B._unsubReplies(); B._unsubReplies = null; }
     B._currentReplies = [];
+    live.repliesDead = false;
     if (r.name !== "q" || !r.arg || !B.user) return;
     B._unsubReplies = B.listenReplies(r.arg, function(reps) {
+      live.retry = 0;
       B._currentReplies = reps;
       if (parseHash().name === "q" && parseHash().arg === r.arg) rerender();
-    }, failToast("load replies", null));
+    }, healListener("replies", "load replies"));
   }
   // Re-evaluated on every auth change: drop the old listener/flag first so a
   // signed-out or different user never sees the previous moderator's queue.
@@ -1336,15 +1364,17 @@
   function syncPosts() {
     var B = window.Backend;
     if (B._unsubPosts) { B._unsubPosts(); B._unsubPosts = null; }
+    live.postsDead = false;
     if (!B.user) { B.posts = []; return; }
     B._unsubPosts = B.listenPosts("all", function(posts) {
+      live.retry = 0;
       var r = parseHash();
       var had = r.name === "q" && (B.posts || []).some(function (p) { return p.id === r.arg; });
       B.posts = posts;
       // On #q only re-render when the post first shows up (direct link / just
       // posted); otherwise a feed update would wipe focus while she types a reply.
       if (r.name === "home" || r.name === "circle" || (r.name === "q" && !had)) rerender();
-    }, failToast("load posts", null));
+    }, healListener("posts", "load posts"));
   }
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -1352,6 +1382,8 @@
     app.addEventListener("click", onClick);
     app.addEventListener("input", onInput);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("online", reviveListeners);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) reviveListeners(); });
     $("#sheet-backdrop").addEventListener("click", closeSheet);
     window.addEventListener("hashchange", function () { 
       closeSheet(); 
