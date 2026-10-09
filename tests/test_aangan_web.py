@@ -112,11 +112,16 @@ class TestData(unittest.TestCase):
         self.assertNotIn('"MomSakhi"', _read("app.js"))
         self.assertNotIn('"Aangan"', _read("app.js"))
 
-    def test_launch_city_live_others_soon(self):
-        live = [c for c in self.d["cities"] if c["status"] == "live"]
-        self.assertEqual([c["name"] for c in live], ["Mountain View / Sunnyvale"])
-        soon = {c["name"] for c in self.d["cities"] if c["status"] == "soon"}
-        self.assertTrue({"Cupertino", "San Jose", "Fremont"} <= soon)
+    def test_city_suggestions_are_indian_and_free_text(self):
+        # City is optional free text; data.js only offers datalist suggestions.
+        self.assertNotIn("cities", self.d)
+        sugg = self.d["citySuggestions"]
+        self.assertTrue({"Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Chennai", "Kolkata", "Pune",
+                         "Ahmedabad", "Jaipur", "Lucknow", "Chandigarh", "Kochi", "Indore",
+                         "Bhubaneswar", "Noida", "Gurugram"} <= set(sugg))
+        self.assertEqual(len(sugg), len(set(sugg)))
+        self.assertTrue(all(0 < len(c) <= 40 for c in sugg))
+        self.assertFalse({"Mountain View", "Sunnyvale", "Cupertino"} & set(sugg))
 
     def test_required_languages_and_stages(self):
         self.assertEqual(set(self.d["languages"]), {"English", "Hindi", "Tamil", "Telugu", "Kannada", "Marathi",
@@ -643,6 +648,137 @@ class TestModeration(unittest.TestCase):
     def test_moderation_css(self):
         for sel in (".btn-danger", ".mod-item", ".mod-actions", ".uid-row"):
             self.assertIn(sel, self.css)
+
+
+def _node():
+    for cand in (shutil.which("node"), os.path.expanduser("~/.local/bin/node"),
+                 os.path.expanduser("~/liquid/state/scratch/jdk/node-v20.18.0-darwin-arm64/bin/node")):
+        if cand and os.path.exists(cand):
+            return cand
+    return None
+
+
+class TestOptionalCity(unittest.TestCase):
+    """2026-10-09: city became OPTIONAL free text (target users: moms in India).
+    Only the meetup features -- the Meetups tab and Nearby moms -- need it and
+    show an "Add your city" card until it is set. Feed/posting/circles never do.
+    Real mode never shows the fictional demo meetups / moms / sample map."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = _read("app.js")
+        cls.css = _read("styles.css")
+        with open(os.path.join(APP_DIR, "firestore.rules"), encoding="utf-8") as f:
+            cls.rules = f.read()
+
+    def test_onboarding_city_is_optional_free_text(self):
+        self.assertIn('data-act="city-skip"', self.app)
+        self.assertIn("Skip for now", self.app)
+        self.assertIn('list="city-suggestions"', self.app)
+        self.assertIn("var CITY_MAX = 40;", self.app)
+        self.assertIn('placeholder="e.g. Pune, Bengaluru, Delhi"', self.app)
+        self.assertNotIn("D.cities", self.app)
+        self.assertNotIn('data-act="waitlist"', self.app)
+        # Continue is never disabled on the city step.
+        self.assertNotRegex(self.app, r'id="city-continue"[^>]*disabled')
+
+    def test_no_us_city_in_user_visible_app_copy(self):
+        for place in ("Mountain View", "Sunnyvale", "MOUNTAIN VIEW", "SUNNYVALE", "SF BAY", "El Camino", "Cuesta Park"):
+            self.assertNotIn(place, self.app, place)
+
+    def test_profile_rules_allow_owner_to_write_city_unchanged(self):
+        # City rides on /profiles/{uid}; the existing owner-write rule already permits
+        # it, so no rules change (and no console re-publish) is needed.
+        self.assertIn("match /profiles/{uid} {\n      allow read: if request.auth != null;\n"
+                      "      allow write: if request.auth != null && request.auth.uid == uid;", self.rules)
+
+    def test_css_for_gate_and_strip(self):
+        for sel in (".city-gate", ".city-strip", ".city-field"):
+            self.assertIn(sel, self.css)
+        self.assertNotIn(".waitlist", self.css)
+
+    def test_rendered_behaviour_demo_and_real(self):
+        node = _node()
+        if not node:
+            self.skipTest("node not installed")
+        harness = r"""
+const fs = require('fs'), path = require('path'), vm = require('vm');
+const webDir = %r;
+const dataJs = fs.readFileSync(path.join(webDir, 'data.js'), 'utf8');
+const appJs = fs.readFileSync(path.join(webDir, 'app.js'), 'utf8');
+function boot(backend, seed) {
+  const ls = { store: {}, getItem(k) { return this.store[k] || null; }, setItem(k, v) { this.store[k] = v; }, removeItem(k) { delete this.store[k]; } };
+  if (seed) ls.store['aangan.demo.v1'] = JSON.stringify(seed);
+  const w = { location: { hash: '#home', search: '', hostname: 'localhost' }, localStorage: ls,
+    document: { addEventListener() {}, querySelector() { return null; }, getElementById() { return null; }, body: { setAttribute() {} } },
+    Backend: backend, console: console, setTimeout: setTimeout, clearTimeout: clearTimeout };
+  w.window = w;
+  vm.runInContext(dataJs, vm.createContext(w)); vm.runInContext(appJs, w);
+  return w.AANGAN;
+}
+function ok(c, msg) { if (!c) throw new Error(msg); }
+for (const real of [false, true]) {
+  const A = boot({ isReal: real }, null);
+  const tag = real ? 'real: ' : 'demo: ';
+  ok(A.city() === '', tag + 'fresh store must have no city');
+  const ob = A.V['onboard/city']().html;
+  ok(ob.includes('id="city-skip"') && ob.includes('optional') && ob.includes('<datalist id="city-suggestions">') && ob.includes('value="Pune"'), tag + 'onboarding city step: ' + ob);
+  const welcome = A.V.welcome().html;
+  ok(!/Mountain View|Sunnyvale/.test(welcome), tag + 'welcome names a US city');
+  ok(welcome.includes('Meetups in your city'), tag + 'welcome promise row');
+  // Gated without a city ...
+  for (const v of ['meetups', 'nearby']) {
+    const h = A.V[v]().html;
+    ok(h.includes('id="city-gate"') && h.includes('Add your city to use meetups') && h.includes('data-act="save-city"'), tag + v + ' not gated: ' + h);
+    ok(!h.includes('data-act="rsvp"') && !h.includes('map-card'), tag + v + ' leaks content behind the gate');
+  }
+  // ... but the rest of the app is not.
+  for (const v of ['home', 'ask', 'me']) ok(!A.V[v]().html.includes('city-gate'), tag + v + ' must not be gated');
+  ok(A.V.me().html.includes('Not set · needed for meetups'), tag + 'Me shows empty city row');
+  // Setting a city lifts the gate.
+  A.saveCity('   Pune  ');
+  ok(A.city() === 'Pune', tag + 'city trimmed: ' + A.city());
+  const m = A.V.meetups().html;
+  ok(!m.includes('city-gate') && m.includes('Pune') && m.includes('data-act="edit-city"'), tag + 'meetups after city: ' + m);
+  ok(A.V.me().html.includes('>Pune<'), tag + 'Me shows city');
+  if (real) {
+    ok(m.includes('No meetups in Pune yet') && !m.includes('data-act="rsvp"') && !m.includes('Shoreline'), 'real meetups must be an honest empty state: ' + m);
+    A.V.nearby(); // opt-in screen first
+  } else {
+    ok(m.includes('data-act="rsvp"') && m.includes('sample data (demo)'), 'demo meetups list: ' + m);
+  }
+  // Escaping + length cap.
+  A.saveCity('<img src=x onerror=alert(1)>');
+  const x = A.V.meetups().html + A.V.me().html;
+  ok(!x.includes('<img src=x') && x.includes('&lt;img src=x'), tag + 'city not escaped');
+  A.saveCity('x'.repeat(100)); ok(A.city().length === 40, tag + 'city not capped at 40');
+  A.saveCity(''); ok(A.V.meetups().html.includes('city-gate'), tag + 'clearing city must re-gate');
+}
+// Real-mode nearby after opt-in: no fake moms, no sample map.
+{
+  const A = boot({ isReal: true }, { onboarded: true, city: 'Kochi', nearbyOn: true });
+  const h = A.V.nearby().html;
+  ok(h.includes('No moms nearby in Kochi yet') && !h.includes('map-card') && !h.includes('data-act="say-hi"'), 'real nearby: ' + h);
+  const d = boot({ isReal: false }, { onboarded: true, city: 'Kochi', nearbyOn: true }).V.nearby().html;
+  ok(d.includes('map-card') && d.includes('Sample neighbourhood map (demo data)') && !/MOUNTAIN VIEW|SUNNYVALE/.test(d), 'demo nearby map: ' + d);
+}
+// Migration: the old picker id is not a city.
+ok(boot({ isReal: false }, { onboarded: true, city: 'mv-sv', waitlist: ['cupertino'] }).city() === '', 'mv-sv must migrate to empty');
+ok(boot({ isReal: false }, { onboarded: true, city: ' Delhi ' }).city() === 'Delhi', 'existing free text kept');
+// Firestore: write {city} only for a signed-in, onboarded mom.
+(async () => {
+  const calls = [];
+  const be = (onb) => ({ isReal: true, user: { uid: 'u1' }, saveProfile(uid, doc) { calls.push([uid, doc]); return Promise.resolve(); } });
+  boot(be(true), { onboarded: true }).saveCity('Indore');
+  ok(calls.length === 1 && calls[0][0] === 'u1' && JSON.stringify(calls[0][1]) === '{"city":"Indore"}', 'firestore write: ' + JSON.stringify(calls));
+  boot(be(false), { onboarded: false }).saveCity('Indore');
+  ok(calls.length === 1, 'must not write a city-only profile before onboarding finishes');
+  console.log('OK');
+})().catch(e => { console.error(e.message); process.exit(1); });
+""" % WEB_DIR
+        r = subprocess.run([node, "-e", harness], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("OK", r.stdout)
 
 
 if __name__ == "__main__":

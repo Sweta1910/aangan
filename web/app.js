@@ -23,8 +23,9 @@
   function freshStore() {
     return {
       onboarded: false,
-      city: "mv-sv",
-      waitlist: [],
+      // Free-text city, optional ("" = not set). Only the meetup features (Meetups
+      // tab + Nearby moms) need it; everything else works without. See cityGate().
+      city: "",
       profile: { nickname: D.me.nickname, fullName: "", email: "", anonDefault: true, stages: ["Toddler"], langs: ["English", "Hindi"] },
       verify: { phone: false, google: false },
       authMethod: null,
@@ -42,10 +43,24 @@
       joined: {}          // circleId -> true
     };
   }
+  // City is whatever the mom types (any Indian city, town or area), so it is only
+  // normalised, never matched against a list: control chars dropped, whitespace
+  // collapsed, trimmed, capped at CITY_MAX. It is ALWAYS esc()'d when rendered.
+  var CITY_MAX = 40;
+  function cleanCity(v) {
+    return String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, CITY_MAX).trim();
+  }
   function load() {
     try {
       var raw = localStorage.getItem(STORE_KEY);
-      if (raw) { var s = JSON.parse(raw); return Object.assign(freshStore(), s); }
+      if (raw) {
+        var s = Object.assign(freshStore(), JSON.parse(raw));
+        // Before 2026-10-09 city was a picker id ("mv-sv"); an id is not a city
+        // name, so old stores start with no city rather than a fake one.
+        s.city = (typeof s.city === "string" && s.city !== "mv-sv") ? cleanCity(s.city) : "";
+        delete s.waitlist;
+        return s;
+      }
     } catch (e) { /* private mode or bad JSON: start fresh */ }
     return freshStore();
   }
@@ -71,6 +86,42 @@
   function circle(id) { return byId(D.circles, id); }
   function mom(id) { return byId(D.moms, id); }
   function hood(id) { return byId(D.neighbourhoods, id); }
+
+  // ---------------------------------------------------------------- city
+  // One city input used by onboarding, the meetups gate and the Me sheet. The
+  // <datalist> only SUGGESTS common Indian cities (data.js citySuggestions); any
+  // text is accepted. Only one city input is on screen at a time, so the
+  // datalist id never collides.
+  function hasCity() { return !!store.city; }
+  function cityField(id, label, hint) {
+    return '<div class="field city-field"><label for="' + id + '">' + label + "</label>" +
+      '<input class="input" id="' + id + '" list="city-suggestions" maxlength="' + CITY_MAX + '" value="' + esc(store.city) + '" placeholder="e.g. Pune, Bengaluru, Delhi" autocomplete="address-level2" enterkeyhint="done" data-city-input="1">' +
+      '<datalist id="city-suggestions">' + (D.citySuggestions || []).map(function (c) { return '<option value="' + esc(c) + '">'; }).join("") + "</datalist>" +
+      (hint ? '<p class="hint">' + hint + "</p>" : "") + "</div>";
+  }
+  // Firestore keeps city on the mom's /profiles/{uid} doc (rules already let the
+  // owner write her own doc). Locally it lives in store.city, NOT store.profile,
+  // so these two map between the shapes in one place.
+  function applyProfile(p) {
+    if (!p) return;
+    if (typeof p.city === "string") store.city = cleanCity(p.city);
+    var rest = Object.assign({}, p); delete rest.city;
+    store.profile = Object.assign(store.profile || {}, rest);
+  }
+  function profileDoc() { return Object.assign({}, store.profile, { city: store.city }); }
+  // Saves locally always. In real mode it also writes Firestore, but only once
+  // she has finished onboarding: a city-only profile doc written mid-onboarding
+  // would make getProfile() treat her as onboarded on the next load.
+  function saveCity(value, btn) {
+    store.city = cleanCity(value); save();
+    var B = window.Backend;
+    if (isRealMode() && B.user && store.onboarded) {
+      busy(btn);
+      return B.saveProfile(B.user.uid, { city: store.city }).then(function () {
+        if (btn) btn.disabled = false;
+      }).catch(failToast("save your city", btn));
+    }
+  }
   // Firestore createdAt is null on a pending local write (serverTimestamp not yet
   // resolved); treat anything missing or odd as "just now" rather than throwing.
   function formatTime(t) {
@@ -303,7 +354,7 @@
       '<div class="promise">' +
       promiseRow("🤍", "var(--plum-soft)", "Women-only & verified", "Every member is verified by phone or Google") +
       promiseRow("🫶", "var(--peach)", "Anonymous when you need it", "Ask anything without your name on it") +
-      promiseRow("📍", "var(--teal-soft)", "Moms near you", "Starting in Mountain View & Sunnyvale") +
+      promiseRow("📍", "var(--teal-soft)", "Moms near you", "Meetups in your city · add it whenever you like") +
       "</div>" +
       '<div class="welcome-cta">' +
       '<div class="welcome-cta-header"><h3>Join the circle</h3><p>Women-only · Safe · Verified</p></div>' +
@@ -325,23 +376,16 @@
     return '<div class="backbar"><button class="icon-btn" data-act="go" data-to="' + to + '" aria-label="Back">' + icon("back") + '</button><span class="title"></span></div>';
   }
 
+  // Step 1 is optional: Continue works with an empty box and "Skip for now" clears
+  // it. The city is only needed for meetups; cityGate() asks again there.
   V["onboard/city"] = function () {
-    var cities = D.cities.map(function (c) {
-      if (c.status === "live") {
-        return '<button class="card city live" aria-pressed="' + (store.city === c.id) + '" data-act="city" data-id="' + c.id + '" id="city-' + c.id + '">' +
-          '<span class="ci">🌼</span><span class="grow"><b>' + esc(c.name) + "</b><span>" + c.members.toLocaleString() + ' moms already here</span></span><span class="live-pill">Live</span></button>';
-      }
-      var wl = store.waitlist.indexOf(c.id) >= 0;
-      return '<button class="card city soon" data-act="waitlist" data-id="' + c.id + '" id="city-' + c.id + '">' +
-        '<span class="ci">🌱</span><span class="grow"><b>' + esc(c.name) + "</b><span>" + (wl ? "You're on the waitlist ✓" : "Opening " + esc(c.eta)) + '</span></span><span class="soon-pill">Coming soon</span></button>';
-    }).join("");
     return { tab: null, html:
       '<div class="view">' + obBack("#welcome") + '<div class="ob">' + steps(1) +
       "<h1>Where are you, mama?</h1>" +
-      '<p class="lead">We\'re launching city by city so every circle feels truly local.</p>' +
-      '<div class="city-list">' + cities + "</div>" +
-      '<p class="waitlist">Tap a "coming soon" city to join its waitlist.</p>' +
-      '<div class="ob-foot"><button class="btn btn-primary btn-block" data-act="go" data-to="#onboard/about" id="city-continue">Continue</button></div>' +
+      '<p class="lead">Optional — you only need a city to join meetups and find moms nearby. You can add or change it anytime from Me.</p>' +
+      cityField("city-input", 'Your city <span class="tiny">(optional)</span>', "Pick a suggestion or type your own city, town or area.") +
+      '<div class="ob-foot"><button class="btn btn-primary btn-block" data-act="city-continue" id="city-continue">Continue</button>' +
+      '<button class="btn btn-ghost btn-block" data-act="city-skip" id="city-skip" style="margin-top:8px">Skip for now</button></div>' +
       "</div></div>" };
   };
 
@@ -395,8 +439,8 @@
   };
 
   function homeTop() {
-    var c = byId(D.cities, store.city);
-    return '<header class="topbar"><div class="logo">' + logoMark() + '<div><div class="logo-word">' + esc(BRAND.name) + '</div><div class="sub">' + icon("pin", "") .replace('class=""', 'style="width:12px;height:12px"') + esc(c.name) + "</div></div></div>" +
+    var sub = hasCity() ? '<div class="sub">' + icon("pin", "").replace('class=""', 'style="width:12px;height:12px"') + esc(store.city) + "</div>" : "";
+    return '<header class="topbar"><div class="logo">' + logoMark() + '<div><div class="logo-word">' + esc(BRAND.name) + "</div>" + sub + "</div></div>" +
       '<span style="flex:1"></span>' +
       '<a href="#safety" class="icon-btn" aria-label="Need help now?" style="color:var(--plum)">' + icon("shield") + '</a>' +
       '<a class="icon-btn" href="#chats" aria-label="Messages" id="open-chats">' + icon("chat") + '<span class="dot"></span></a></header>';
@@ -485,21 +529,19 @@
       '<p class="tiny" style="text-align:center;margin-top:10px;font-weight:600">Moms supporting moms — not a replacement for your doctor or therapist.</p></div>' };
   };
 
+  // DEMO MODE ONLY. The neighbourhood dots are fictional demo data, so the map is
+  // drawn as a generic sample (no real place names) and captioned as such; real
+  // mode never shows it (V.nearby renders an honest empty state instead).
   function mapSvg(activeHood) {
-    var s = '<svg viewBox="0 0 340 220" role="img" aria-label="Stylised map of Mountain View and Sunnyvale neighbourhoods">' +
+    var s = '<svg viewBox="0 0 340 220" role="img" aria-label="Sample neighbourhood map (demo data)">' +
       '<rect width="340" height="220" fill="#F7EEDF"/>' +
       '<path d="M0 0H340V26C290 40 236 22 176 36 112 50 64 30 0 44Z" fill="#D5E8E4"/>' +
-      '<text x="250" y="18" font-size="8" fill="#5D8580" font-family="Plus Jakarta Sans" letter-spacing="1.5">SF BAY</text>' +
       '<path d="M54 40c18-6 44-6 58 4 4 10-6 18-26 18-20 0-36-8-32-22z" fill="#D9E8CF"/>' +
-      '<text x="62" y="55" font-size="7" fill="#5E7A4E" font-family="Plus Jakarta Sans">Shoreline</text>' +
       '<path d="M0 72C90 62 200 74 340 62" stroke="#EBCB9C" stroke-width="7" fill="none"/>' +
-      '<rect x="296" y="56" width="22" height="13" rx="4" fill="#fff" stroke="#E2B676"/><text x="300" y="66" font-size="8" font-weight="700" fill="#8A5A17" font-family="Plus Jakarta Sans">101</text>' +
       '<path d="M0 134C100 128 220 122 340 116" stroke="#EADBC5" stroke-width="5" fill="none"/>' +
-      '<text x="96" y="125" font-size="7" fill="#9A8370" font-family="Plus Jakarta Sans">El Camino Real</text>' +
       '<path d="M112 44C118 100 102 160 120 220" stroke="#A9CFC9" stroke-width="2.5" fill="none" stroke-dasharray="1 0"/>' +
       '<path d="M162 66V220" stroke="#E6D6C2" stroke-width="1.5" stroke-dasharray="4 4" fill="none"/>' +
-      '<text x="18" y="210" font-size="8.5" font-weight="700" fill="#8F7E74" letter-spacing="2" font-family="Plus Jakarta Sans">MOUNTAIN VIEW</text>' +
-      '<text x="236" y="210" font-size="8.5" font-weight="700" fill="#8F7E74" letter-spacing="2" font-family="Plus Jakarta Sans">SUNNYVALE</text>';
+      '<text x="18" y="210" font-size="8.5" font-weight="700" fill="#8F7E74" letter-spacing="2" font-family="Plus Jakarta Sans">SAMPLE MAP · DEMO</text>';
     D.neighbourhoods.forEach(function (h) {
       var on = activeHood === h.id;
       s += '<g class="hood ' + (on ? "active" : "") + '" data-act="hood" data-id="' + h.id + '" tabindex="0" role="button" aria-label="' + esc(h.name) + ", about " + h.moms + ' moms">' +
@@ -511,8 +553,22 @@
     return s + "</svg>";
   }
 
+  // "Meetup feature" = everything that needs to know where she is: the Meetups tab
+  // (list, RSVP, host) and Nearby moms (map, say-hi). Both show this card until a
+  // city is set; feed, posting, replies, circles, chats and Me never need one.
+  function cityGate(tab, title) {
+    return { tab: tab, html:
+      '<div class="view"><header class="topbar"><h1>' + title + "</h1></header>" +
+      '<div class="card city-gate" id="city-gate"><span class="cg-i" aria-hidden="true">📍</span>' +
+      "<h2>Add your city to use meetups</h2>" +
+      '<p class="muted">Meetups and Nearby moms are local, so we need your city first. It\'s only used to show moms and meetups near you — the rest of ' + esc(BRAND.name) + " works without it.</p>" +
+      cityField("gate-city", "Your city") +
+      '<button class="btn btn-primary btn-block" data-act="save-city" data-src="gate-city" id="gate-save">Save</button></div></div>' };
+  }
+
   var nearbyFilter = null;
   V.nearby = function () {
+    if (!hasCity()) return cityGate("nearby", "Moms nearby");
     if (!store.nearbyOn) {
       return { tab: "nearby", html:
         '<div class="view"><div class="optin">' +
@@ -524,7 +580,7 @@
         "<h1>Moms near you</h1>" +
         '<p class="lead">Find moms in your neighbourhood for walks, playdates and chai. You\'re invisible until you choose otherwise.</p>' +
         '<div class="optin-list">' +
-        '<div class="row"><span class="oi">' + icon("pin") + "</span><div><b>Neighbourhood only</b>Others see \"Cuesta Park area · ~1 mi\" — never your exact location.</div></div>" +
+        '<div class="row"><span class="oi">' + icon("pin") + "</span><div><b>Neighbourhood only</b>Others see \"Koramangala area · ~1 km\" — never your exact location.</div></div>" +
         '<div class="row"><span class="oi">' + icon("hand") + "</span><div><b>Mutual hellos</b>Chat unlocks only when you both say hi.</div></div>" +
         '<div class="row"><span class="oi">' + icon("eyeoff") + "</span><div><b>Hide anytime</b>Turn this off in one tap from your profile.</div></div></div>" +
         '<div class="card toggle-row"><div class="grow"><b>Show me to moms near me</b><span>Off by default</span></div>' + switchEl(false, "nearby-on", "Show me to moms near me", ' id="nearby-toggle"') + "</div>" +
@@ -550,17 +606,39 @@
         '<p class="status-note">' + note + "</p></article>";
     }).join("");
     var fh = nearbyFilter && hood(nearbyFilter);
-    return { tab: "nearby", html:
-      '<div class="view"><header class="topbar"><h1>Moms nearby</h1><a class="icon-btn" href="#chats" aria-label="Messages">' + icon("chat") + "</a></header>" +
+    var head = '<div class="view"><header class="topbar"><h1>Moms nearby</h1><a class="icon-btn" href="#chats" aria-label="Messages">' + icon("chat") + "</a></header>" + cityStrip();
+    // Real mode has no nearby-moms backend yet: show an honest empty state for her
+    // city rather than the fictional demo moms and sample map.
+    if (isRealMode()) {
+      return { tab: "nearby", html: head +
+        '<div class="mom-list">' + emptyState("🌿", "No moms nearby in " + esc(store.city) + " yet", "You're on the list — as moms in your city turn this on, they'll show up here.") + "</div></div>" };
+    }
+    return { tab: "nearby", html: head +
       '<div class="card map-card">' + mapSvg(nearbyFilter) +
       '<div class="map-legend"><span>' + icon("shield") + "Neighbourhoods only · never exact spots</span><span>" + (fh ? '<button class="link" data-act="hood-clear">Show all</button>' : "Tap an area") + "</span></div></div>" +
       '<div class="section-head" style="padding:18px 18px 0"><h2>' + (fh ? esc(fh.name) : "Say hi to a mom") + '</h2><span class="muted">' + moms.length + " shown</span></div>" +
-      '<div class="privacy-strip">' + icon("eyeoff") + "You're visible as \"" + esc(store.profile.nickname) + ' · Cuesta Park area". <a class="link" href="#me" style="margin-left:auto">Change</a></div>' +
+      '<div class="privacy-strip">' + icon("eyeoff") + "You're visible as \"" + esc(store.profile.nickname) + " · " + esc(store.city) + ' · neighbourhood only". <a class="link" href="#me" style="margin-left:auto">Change</a></div>' +
       '<div class="mom-list">' + (cards || emptyState("🌿", "No moms shown here yet", "Try another area — more moms join every week.")) + "</div></div>" };
   };
 
+  // "📍 Pune · Change" line under the Meetups / Nearby headers.
+  function cityStrip() {
+    return '<p class="city-strip">' + icon("pin") + "<span>" + esc(store.city) + '</span><button class="link" data-act="edit-city" id="change-city">Change</button>' +
+      (isRealMode() ? "" : '<span class="tiny">· sample data (demo)</span>') + "</p>";
+  }
+
   var meetupsSeg = "all";
   V.meetups = function () {
+    if (!hasCity()) return cityGate("meetups", "Meetups");
+    var head = '<div class="view"><header class="topbar"><h1>Meetups</h1></header>' + cityStrip() +
+      '<p class="muted" style="padding:0 18px 14px;margin-top:-6px;font-size:14px">Small, mom-hosted, in public places in ' + esc(store.city) + ".</p>";
+    var host = '<div class="card host-cta"><span style="font-size:28px">🪔</span><div class="grow"><b>Host a meetup</b><span>Stroller walk, chai morning, toy swap — you pick.</span></div><button class="btn btn-ghost btn-sm" data-act="soon">Start</button></div>';
+    // Real mode: meetups aren't stored in Firestore yet, so there is nothing real
+    // to list -- never show the fictional demo events to a real mom.
+    if (isRealMode()) {
+      return { tab: "meetups", html: head +
+        '<div class="events">' + emptyState("🗓️", "No meetups in " + esc(store.city) + " yet", "Be the first to host one — small, public and mom-led.") + "</div>" + host + "</div>" };
+    }
     var evs = D.events.filter(function (e) { return meetupsSeg === "all" || store.rsvp[e.id]; });
     var list = evs.map(function (e) {
       var going = !!store.rsvp[e.id];
@@ -572,13 +650,10 @@
         '<div class="event-foot"><span class="avatar-stack">' + faces + '</span><span class="going">' + (e.going + (going ? 1 : 0)) + " going</span>" +
         '<button class="btn btn-primary btn-sm rsvp" data-act="rsvp" data-id="' + e.id + '" aria-pressed="' + going + '" id="rsvp-' + e.id + '">' + (going ? icon("check") + "Going" : "RSVP") + "</button></div></div></article>";
     }).join("");
-    return { tab: "meetups", html:
-      '<div class="view"><header class="topbar"><h1>Meetups</h1></header>' +
-      '<p class="muted" style="padding:0 18px 14px;margin-top:-6px;font-size:14px">Small, mom-hosted, in public places around Mountain View & Sunnyvale.</p>' +
+    return { tab: "meetups", html: head +
       '<div class="seg" role="tablist"><button data-act="seg" data-v="all" aria-pressed="' + (meetupsSeg === "all") + '">Upcoming</button><button data-act="seg" data-v="going" aria-pressed="' + (meetupsSeg === "going") + '">Going (' + Object.keys(store.rsvp).filter(function (k) { return store.rsvp[k]; }).length + ")</button></div>" +
       '<div class="events">' + (list || emptyState("🗓️", "Nothing yet", "RSVP to a meetup and it will show up here.")) + "</div>" +
-      '<div class="card host-cta"><span style="font-size:28px">🪔</span><div class="grow"><b>Host a meetup</b><span>Stroller walk, chai morning, toy swap — you pick.</span></div><button class="btn btn-ghost btn-sm" data-act="soon">Start</button></div>' +
-      "</div>" };
+      host + "</div>" };
   };
 
   var MOCK_REPLIES = ["That sounds lovely 😊", "Haha same here! Toddler life 😅", "Yes! Let's do it. Saturday works for me.", "Aww thank you, that means a lot 💛", "I'll bring the chai ☕"];
@@ -658,7 +733,6 @@
     ].map(function (o) {
       return '<button class="radio-row" role="radio" aria-checked="' + (store.msgPolicy === o[0]) + '" data-act="policy" data-v="' + o[0] + '"><span class="grow"><b>' + o[1] + "</b><span>" + o[2] + '</span></span><span class="radio"></span></button>';
     }).join("");
-    var c = byId(D.cities, store.city);
     return { tab: "me", html:
       '<div class="view"><header class="topbar"><h1>Me</h1></header>' +
       '<div class="card profile-card">' + avatar(p.nickname, D.me.hue, "xl") +
@@ -675,7 +749,7 @@
       (canModerate() ? '<a class="link-row" href="#mod" id="open-mod" style="text-decoration:none;color:inherit">' + icon("flag") + '<span class="grow">Moderation' + (isRealMode() ? "" : " (demo)") + '</span><span class="tiny">' + modReports().length + " open</span>" + icon("chevron") + "</a>" : "") +
       '<a class="link-row" href="#safety" style="text-decoration:none;color:inherit">' + icon("shield") + '<span class="grow">Safety centre & crisis lines</span>' + icon("chevron") + "</a></div></div>" +
       '<div class="settings-group"><h3>Account</h3><div class="card">' +
-      '<button class="link-row" data-act="go" data-to="#onboard/city">' + icon("pin") + '<span class="grow">City</span><span class="tiny">' + esc(c.name) + "</span>" + icon("chevron") + "</button>" +
+      '<button class="link-row" data-act="edit-city" id="me-city">' + icon("pin") + '<span class="grow">City</span><span class="tiny" id="me-city-value">' + (hasCity() ? esc(store.city) : "Not set · needed for meetups") + "</span>" + icon("chevron") + "</button>" +
       ((window.Backend && window.Backend.isReal) ? 
         (window.Backend.user ? '<div class="link-row uid-row"><span class="grow"><b>Your account ID</b><span class="tiny" id="my-uid">' + esc(window.Backend.user.uid) + '</span></span><button class="btn btn-ghost btn-sm" data-act="copy-uid" id="copy-uid">Copy</button></div>' : "") +
         '<button class="link-row" data-act="sign-out" id="sign-out">' + icon("reset") + '<span class="grow">Sign out</span>' + icon("chevron") + "</button></div></div>" :
@@ -796,7 +870,9 @@
           D.circles.slice(0, 3).map(function(c) { return '<a class="rr-link" href="#circle/' + c.id + '">' + c.emoji + ' ' + esc(c.name) + '</a>'; }).join('') + 
           '</div>' +
           '<div class="rr-section"><h3>Upcoming Meetups</h3>' + 
-          D.events.slice(0, 2).map(function(e) { return '<a class="rr-link" href="#meetups">🗓️ ' + esc(e.title) + '</a>'; }).join('') + 
+          (!hasCity() ? '<a class="rr-link" href="#meetups">📍 Add your city to see meetups</a>'
+            : isRealMode() ? '<p class="tiny">No meetups in ' + esc(store.city) + " yet.</p>"
+            : D.events.slice(0, 2).map(function(e) { return '<a class="rr-link" href="#meetups">🗓️ ' + esc(e.title) + '</a>'; }).join('')) + 
           '</div>' +
           '<div class="rr-section"><h3>Kindness Guidelines</h3><p class="tiny">Supportive reactions only — no downvotes, no shaming. A safe space for moms.</p></div>' +
           '<div class="rr-section"><a href="#safety" class="rr-link" style="color:var(--plum);font-weight:600">🤍 Need help now?</a></div>';
@@ -877,7 +953,7 @@
     save();
     return window.Backend.getProfile(u.uid).then(function(p) {
       if (p) {
-        store.profile = Object.assign(store.profile, p);
+        applyProfile(p);
         store.onboarded = true;
         save();
         go("#home");
@@ -978,12 +1054,24 @@
       case "start-phone-onboard":
         store.authMethod = "phone"; save(); go("#onboard/city"); break;
       case "skip-onboarding": store.onboarded = true; save(); go("#home"); break;
-      case "city": store.city = id; save(); rerender(); break;
-      case "waitlist": {
-        var c = byId(D.cities, id);
-        if (store.waitlist.indexOf(id) < 0) store.waitlist.push(id);
-        save(); rerender(); toast("We'll tell you when " + c.name + " opens 💛"); break;
+      case "city-continue": { var ci = $("#city-input"); saveCity(ci ? ci.value : ""); go("#onboard/about"); break; }
+      case "city-skip": saveCity(""); go("#onboard/about"); break;
+      // Gate card and Me sheet both save through here; re-render opens the real
+      // meetups / nearby view straight away once a city is set.
+      case "save-city": {
+        var src = $("#" + el.getAttribute("data-src"));
+        var val = cleanCity(src ? src.value : "");
+        if (!val) { if (src) src.focus(); toast("Type your city first"); break; }
+        saveCity(val, el); closeSheet(); rerender(); toast("City saved · " + val); break;
       }
+      case "clear-city": saveCity("", el); closeSheet(); rerender(); toast("City removed · meetups are off until you add one"); break;
+      case "edit-city":
+        openSheet("<h3>Your city</h3><p class=\"muted\">Optional. Only meetups and Nearby moms use it.</p>" + cityField("sheet-city", "City") +
+          '<div class="sheet-list"><button class="btn btn-primary btn-block" data-act="save-city" data-src="sheet-city" id="sheet-city-save">Save</button>' +
+          (hasCity() ? '<button class="sheet-item danger" data-act="clear-city" id="sheet-city-clear">' + icon("close") + "<span>Remove city<small>Meetups and Nearby will ask again</small></span></button>" : "") +
+          '<button class="sheet-item" data-act="sheet-close">' + icon("close") + "<span>Cancel</span></button></div>");
+        var sc = $("#sheet-city"); if (sc) sc.focus();
+        break;
       case "toggle-stage": case "toggle-lang": {
         var arr = act === "toggle-stage" ? store.profile.stages : store.profile.langs, v = el.getAttribute("data-v");
         var i = arr.indexOf(v); if (i >= 0) arr.splice(i, 1); else arr.push(v);
@@ -1000,7 +1088,7 @@
         store.onboarded = true; save();
         if (window.Backend && window.Backend.isReal && window.Backend.user) {
            busy(el);
-           window.Backend.saveProfile(window.Backend.user.uid, store.profile).then(function () {
+           window.Backend.saveProfile(window.Backend.user.uid, profileDoc()).then(function () {
              go("#home"); toast("Welcome to the circle, " + store.profile.nickname + " 💛");
            }).catch(failToast("save your profile", el));
            break;
@@ -1276,6 +1364,11 @@
   function onKey(e) {
     if (e.key === "Escape") closeSheet();
     if (e.key === "Enter" && !e.shiftKey && e.target.id === "chat-text") { e.preventDefault(); $("#chat-send").click(); }
+    if (e.key === "Enter" && e.target.getAttribute && e.target.getAttribute("data-city-input")) {
+      e.preventDefault();
+      var cbtn = e.target.id === "city-input" ? $("#city-continue") : $('[data-act="save-city"][data-src="' + e.target.id + '"]');
+      if (cbtn) cbtn.click();
+    }
     if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("g.hood")) { e.preventDefault(); onClick({ target: e.target }); }
   }
 
@@ -1284,7 +1377,7 @@
       ["#ask", "Ask"], ["#q/p1", "Question + expert"], ["#nearby", "Nearby moms"], ["#meetups", "Meetups"], ["#chat/m1", "Chat"], ["#me", "Profile & privacy"]];
     var sc = $("#showcase");
     if (sc) sc.innerHTML = '<div class="sc-logo">' + logoMark() + '<span class="logo-word">' + esc(BRAND.name) + "</span></div>" +
-      "<h2>" + esc(BRAND.tagline) + "</h2><p>" + esc(BRAND.blurb) + " Launching first in Mountain View &amp; Sunnyvale.</p>" +
+      "<h2>" + esc(BRAND.tagline) + "</h2><p>" + esc(BRAND.blurb) + "</p>" +
       '<div class="sc-links">' + links.map(function (l) { return '<a href="' + l[0] + '">' + l[1] + "</a>"; }).join("") + "</div>" +
       "<small>" + (isRealMode() ? esc(BRAND.name) + " · v0.1 · beta" : "Clickable prototype · mock data only · all people are fictional") + "</small>";
   }
@@ -1409,7 +1502,7 @@
             syncModerator(u);
             if (u) {
                window.Backend.getProfile(u.uid).then(function(p) {
-                 if (p) { store.profile = Object.assign(store.profile || {}, p); store.onboarded = true; }
+                 if (p) { applyProfile(p); store.onboarded = true; save(); }
                  render();
                }).catch(function (e) {
                  failToast("load your profile", null)(e);
@@ -1432,5 +1525,6 @@
 
   // Exposed for tests/screenshot tooling only.
   window.AANGAN = { kindnessScan: kindnessScan, softenText: softenText, reset: function () { localStorage.removeItem(STORE_KEY); },
-    syncModerator: syncModerator, V: V, isRealMode: isRealMode };
+    syncModerator: syncModerator, V: V, isRealMode: isRealMode, cleanCity: cleanCity, saveCity: saveCity,
+    city: function () { return store.city; } };
 })();

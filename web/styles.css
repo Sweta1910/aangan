@@ -219,22 +219,19 @@ p { margin: 0; }
 }
 .input:focus { border-color: var(--teal-2); box-shadow: 0 0 0 4px rgba(44, 100, 102, .12); }
 textarea.input { min-height: 140px; resize: none; line-height: 1.55; }
-.city-list { display: grid; gap: 10px; margin-top: 22px; }
-.city {
-  display: flex; align-items: center; gap: 14px; padding: 16px; text-align: left; width: 100%;
-  transition: transform .15s var(--ease), box-shadow .2s;
-}
-.city .ci { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; font-size: 22px; flex: none; background: var(--teal-soft); }
-.city b { display: block; font-size: 15px; }
-.city .grow span { font-size: 12.5px; color: var(--ink-2); }
-.city .grow { flex: 1; }
-.city.live[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--teal), var(--shadow-1); }
-.city.soon { opacity: .72; cursor: default; background: rgba(255, 255, 255, .55); box-shadow: none; }
-.city.soon .ci { background: var(--peach); filter: grayscale(.3); }
-.live-pill { font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--teal-soft); color: var(--teal); display: inline-flex; gap: 6px; align-items: center; }
-.live-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #2F8F6B; }
-.soon-pill { font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--peach); color: #7A3B1F; }
-.waitlist { margin-top: 14px; font-size: 13px; color: var(--ink-2); text-align: center; }
+/* Optional free-text city (onboarding, meetups gate, Me sheet). */
+.city-field { margin-top: 22px; }
+.city-field .tiny { font-weight: 500; }
+.city-gate { margin: 8px 14px 0; padding: 22px 18px; text-align: center; }
+.city-gate .cg-i { display: inline-grid; place-items: center; width: 56px; height: 56px; border-radius: 18px; background: var(--teal-soft); font-size: 28px; }
+.city-gate h2 { font-size: 21px; margin-top: 12px; }
+.city-gate p.muted { font-size: 14px; margin: 8px auto 0; max-width: 40ch; }
+.city-gate .city-field { margin-top: 16px; text-align: left; }
+.city-gate .btn { margin-top: 14px; }
+.city-strip { display: flex; align-items: center; gap: 6px; padding: 0 18px 10px; margin-top: -4px; font-size: 13.5px; font-weight: 600; color: var(--teal); }
+.city-strip svg { width: 15px; height: 15px; }
+.city-strip .link { font-size: 13px; margin-left: 4px; }
+.city-strip .tiny { font-weight: 500; }
 .ob-foot { margin-top: auto; padding-top: 24px; }
 
 .toggle-row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }

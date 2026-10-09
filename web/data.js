@@ -8,12 +8,11 @@ window.AANGAN_DATA = {
     "nickname": "SunnyMom",
     "hue": "teal"
   },
-  "cities": [
-    { "id": "mv-sv", "name": "Mountain View / Sunnyvale", "status": "live", "members": 1240 },
-    { "id": "cupertino", "name": "Cupertino", "status": "soon", "eta": "Winter 2026" },
-    { "id": "san-jose", "name": "San Jose", "status": "soon", "eta": "Early 2027" },
-    { "id": "fremont", "name": "Fremont", "status": "soon", "eta": "Early 2027" },
-    { "id": "santa-clara", "name": "Santa Clara", "status": "soon", "eta": "2027" }
+  "citySuggestions": [
+    "Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Chennai", "Kolkata", "Pune", "Ahmedabad",
+    "Jaipur", "Lucknow", "Chandigarh", "Kochi", "Indore", "Bhubaneswar", "Noida", "Gurugram",
+    "Navi Mumbai", "Thane", "Surat", "Nagpur", "Coimbatore", "Visakhapatnam", "Bhopal", "Mysuru",
+    "Vadodara", "Goa", "Dehradun", "Thiruvananthapuram", "Guwahati", "Patna", "Ranchi", "Mangaluru"
   ],
   "stages": ["Expecting", "0–1 yr", "Toddler", "School-age"],
   "languages": ["English", "Hindi", "Tamil", "Telugu", "Kannada", "Marathi", "Bengali", "Gujarati", "Punjabi", "Malayalam"],
