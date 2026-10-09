@@ -769,7 +769,14 @@
     if (app) app.classList.toggle("onboarding-mode", isOnboarding);
     document.body.setAttribute("data-view", r.name);
 
-    tabbar.hidden = isPreAuth && ["chats"].indexOf(r.name) < 0;
+    // Tab bar: always hidden on welcome/onboarding. On tab-less detail pages
+    // (#q/<id> post, #chat/<id>) it is NOT [hidden]; instead the "detail-nav" class
+    // hides it on phones (bottom bar would crowd the reply/chat box) and styles.css
+    // shows it again >= 900px, so laptops keep the top menu next to the ← button.
+    // #chats keeps its old behaviour (bar visible everywhere).
+    var isDetail = !isOnboarding && out.tab === null && r.name !== "chats";
+    tabbar.hidden = isOnboarding;
+    tabbar.classList.toggle("detail-nav", isDetail);
     var tabLinks = $("#tab-links") || tabbar;
     tabLinks.innerHTML = TABS.map(function (t) {
       var cur = out.tab === t.id ? ' aria-current="page"' : "";

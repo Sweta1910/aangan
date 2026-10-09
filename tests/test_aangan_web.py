@@ -301,6 +301,20 @@ class TestData(unittest.TestCase):
         self.assertIn('app.classList.toggle("onboarding-mode", isOnboarding)', js)
         self.assertNotIn('app.classList.toggle("onboarding-mode", isPreAuth)', js)
 
+    def test_top_nav_kept_on_post_and_chat_pages_on_laptop(self):
+        # Laptop: post/chat pages keep the top menu (plus the ← backbar); phones hide
+        # the bar there via .detail-nav. Onboarding still hides it outright.
+        js, css = _read("app.js"), _read("styles.css")
+        self.assertIn('var isDetail = !isOnboarding && out.tab === null && r.name !== "chats";', js)
+        self.assertIn("tabbar.hidden = isOnboarding;", js)
+        self.assertIn('tabbar.classList.toggle("detail-nav", isDetail);', js)
+        self.assertNotIn('tabbar.hidden = isPreAuth', js)
+        self.assertIn('data-act="back" aria-label="Back"', js)
+        mobile = css.index(".tabbar.detail-nav { display: none; }")
+        desktop = css.index(".tabbar.detail-nav { display: flex; }")
+        self.assertLess(mobile, css.index("@media (min-width: 900px)"))
+        self.assertGreater(desktop, css.index("@media (min-width: 900px)"))
+
     def test_firestore_rules(self):
         with open(os.path.join(os.path.dirname(WEB_DIR), "firestore.rules")) as f:
             rules = f.read()

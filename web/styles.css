@@ -522,6 +522,8 @@ textarea.input { min-height: 140px; resize: none; line-height: 1.55; }
   background: rgba(255, 253, 249, .92); backdrop-filter: blur(14px); border-top: 1px solid var(--line); position: relative; z-index: 10;
 }
 .tabbar[hidden] { display: none; }
+/* Post/chat detail pages: no bottom bar on phones; shown as the top menu >= 900px. */
+.tabbar.detail-nav { display: none; }
 .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 0; color: var(--ink-3); font-size: 11px; font-weight: 700; text-decoration: none; transition: color .2s; -webkit-tap-highlight-color: transparent; }
 .tab svg { width: 24px; height: 24px; transition: transform .2s var(--ease); }
 .tab[aria-current="page"] { color: var(--teal); }
@@ -560,6 +562,8 @@ textarea.input { min-height: 140px; resize: none; line-height: 1.55; }
     padding: 0 32px;
     background: rgba(255, 253, 249, .96);
   }
+  /* Laptop: keep the top menu on post/chat pages (← back button stays in the view). */
+  .tabbar.detail-nav { display: flex; }
   .dt-logo {
     display: flex;
     align-items: center;
