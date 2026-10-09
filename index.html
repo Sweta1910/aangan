@@ -1,7 +1,37 @@
 <!doctype html>
-<!-- GitHub Pages serves the repo root; the app lives in web/, so redirect there. -->
-<meta charset="utf-8">
-<title>MomSakhi</title>
-<meta http-equiv="refresh" content="0; url=web/">
-<link rel="canonical" href="web/">
-<p><a href="web/">Open MomSakhi</a></p>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FFF7EE">
+  <meta name="description" content="MomSakhi — a sakhi for every stage of motherhood. A judgement-free, women-only community for Indian moms: share, ask for advice and meet moms nearby.">
+  <meta property="og:site_name" content="MomSakhi">
+  <meta property="og:title" content="MomSakhi — A sakhi for every stage of motherhood.">
+  <meta property="og:description" content="A judgement-free, women-only community for Indian moms: share, ask for advice and meet moms nearby.">
+  <meta property="og:type" content="website">
+  <!-- The visible brand name comes from data.js (brand.name); this title is replaced at runtime. -->
+  <title>MomSakhi — A sakhi for every stage of motherhood.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=f1e0f43">
+</head>
+<body>
+  
+  <div class="app" id="app">
+      <main class="screen" id="screen" tabindex="-1"></main>
+      <nav class="tabbar" id="tabbar" aria-label="Main">
+        <a href="#home" class="dt-logo" id="dt-logo"></a>
+        <div class="tab-links" id="tab-links"></div>
+      </nav>
+      <aside class="right-rail" id="right-rail" hidden></aside>
+      <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
+      <div class="sheet" id="sheet" role="dialog" aria-modal="true" hidden></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+  <script src="data.js?v=f1e0f43"></script>
+  <script src="firebase-config.js?v=f1e0f43"></script>
+  <script src="backend.js?v=f1e0f43"></script>
+  <script src="app.js?v=f1e0f43"></script>
+</body>
+</html>

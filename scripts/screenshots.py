@@ -1,7 +1,7 @@
 """Capture phone-size screenshots of every MomSakhi screen with headless Chromium.
 
 Why a script (not manual screenshots): the prototype is meant to be iterated on,
-so re-shooting all screens must be one command. It serves web/ on a
+so re-shooting all screens must be one command. It serves the repo root on a
 free local port, walks the real click-paths (onboarding -> verify -> home ->
 ask + kindness check -> question -> nearby opt-in -> say hi -> meetups -> chat ->
 profile) and writes PNGs to screenshots/. Any uncaught page error
@@ -21,7 +21,7 @@ import threading
 from playwright.sync_api import sync_playwright
 
 APP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-WEB_DIR = os.path.join(APP_DIR, "web")
+WEB_DIR = APP_DIR  # the app lives at the repo root
 OUT_DIR = os.path.join(APP_DIR, "screenshots")
 
 

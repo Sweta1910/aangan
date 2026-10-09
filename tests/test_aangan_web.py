@@ -1,4 +1,5 @@
-"""Structural tests for the MomSakhi web prototype (web/).
+"""Structural tests for the MomSakhi web prototype (served from the repo root;
+web/ only holds a redirect stub for old /web/#route links).
 
 These are stdlib-only and fast: they prove the static app is complete and
 self-consistent without a browser. Rendering and click-path coverage lives
@@ -14,7 +15,8 @@ import subprocess
 import unittest
 
 APP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-WEB_DIR = os.path.join(APP_DIR, "web")
+# The app is served from the repo root (GitHub Pages root) since 2026-10-09.
+WEB_DIR = APP_DIR
 DATA_PREFIX = "window.AANGAN_DATA = "
 
 
@@ -236,7 +238,9 @@ class TestData(unittest.TestCase):
         self.assertIn("get-started", app_js)
 
     def test_no_selfie_references_in_web(self):
-        for root, _, files in os.walk(WEB_DIR):
+        for root, dirs, files in os.walk(WEB_DIR):
+            # Only shipped app files: skip git internals, scratch and node deps.
+            dirs[:] = [d for d in dirs if d not in (".git", "tmp", "node_modules", "screenshots")]
             for fname in files:
                 if fname.endswith((".js", ".html", ".css", ".json")):
                     path = os.path.join(root, fname)
@@ -245,7 +249,7 @@ class TestData(unittest.TestCase):
                         self.assertNotIn("selfie", content, f"Found unexpected 'selfie' reference in {fname}")
 
     def test_no_saathi_references_in_codebase(self):
-        root_dir = os.path.dirname(WEB_DIR)
+        root_dir = APP_DIR
         for root, dirs, files in os.walk(root_dir):
             if ".git" in root.split(os.sep):
                 continue
@@ -333,7 +337,7 @@ class TestData(unittest.TestCase):
         self.assertGreater(desktop, css.index("@media (min-width: 900px)"))
 
     def test_firestore_rules(self):
-        with open(os.path.join(os.path.dirname(WEB_DIR), "firestore.rules")) as f:
+        with open(os.path.join(APP_DIR, "firestore.rules")) as f:
             rules = f.read()
         self.assertIn("allow read, write: if false;", rules)
         self.assertIn("request.auth.uid == uid", rules)
@@ -561,11 +565,11 @@ class TestRebrandMomSakhi(unittest.TestCase):
     out / orphan data): localStorage keys, the AANGAN_DATA global, the Firebase
     project id aangan-6a58c. Case-sensitive "Aangan" only ever meant the brand."""
 
-    VISIBLE = ["web/index.html", "web/app.js", "web/data.js", "web/styles.css",
-               "index.html", "README.md", "SETUP-FIREBASE.md"]
+    VISIBLE = ["index.html", "app.js", "data.js", "styles.css",
+               "web/index.html", "README.md", "SETUP-FIREBASE.md"]
 
     def test_no_user_visible_aangan(self):
-        root = os.path.dirname(WEB_DIR)
+        root = APP_DIR
         for rel in self.VISIBLE:
             with open(os.path.join(root, rel), encoding="utf-8") as f:
                 hits = [i + 1 for i, line in enumerate(f) if "Aangan" in line]
@@ -992,6 +996,27 @@ console.log('OK');
         r = subprocess.run([node, "-e", harness], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("OK", r.stdout)
+
+
+class TestServedFromRoot(unittest.TestCase):
+    """2026-10-09: the app moved from /web/ to the site root so the public link is
+    https://sweta1910.github.io/momsakhi/#home. web/index.html is only a redirect
+    stub that must keep the #route, so old .../web/#post-12 links still land."""
+
+    def test_app_files_at_root(self):
+        for name in ("index.html", "app.js", "backend.js", "data.js", "firebase-config.js", "styles.css"):
+            self.assertTrue(os.path.exists(os.path.join(APP_DIR, name)), name)
+        self.assertEqual(sorted(os.listdir(os.path.join(APP_DIR, "web"))), ["index.html"])
+
+    def test_web_stub_redirects_and_keeps_hash(self):
+        stub = _read("web/index.html")
+        self.assertIn('location.replace("../" + location.hash)', stub)
+        self.assertIn('<meta http-equiv="refresh" content="0; url=../">', stub)
+        self.assertNotIn("app.js", stub)
+
+    def test_tmp_is_ignored(self):
+        with open(os.path.join(APP_DIR, ".gitignore"), encoding="utf-8") as f:
+            self.assertIn("tmp/", f.read().split())
 
 
 if __name__ == "__main__":

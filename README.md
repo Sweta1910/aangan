@@ -10,13 +10,13 @@ no build step, no API keys. Every person, post and event is fictional; avatars a
 ## Run it
 
 ```bash
-cd web && python3 -m http.server 8765
+cd ~/aangan && python3 -m http.server 8765
 ```
 
 Open **http://localhost:8765/** — on a laptop it shows in a phone frame with quick links to every
-screen; on a phone it fills the screen. Opening `web/index.html` directly also works.
+screen; on a phone it fills the screen. Opening `index.html` directly also works.
 
-**Rename the app:** change `brand.name` in [`web/data.js`](web/data.js) — that's the only place.
+**Rename the app:** change `brand.name` in [`data.js`](data.js) — that's the only place.
 
 ## Screens
 
@@ -60,9 +60,9 @@ python3 scripts/screenshots.py
 ## Next steps
 
 1. **Share a public link** (it's static, so any of these take minutes):
-   - **Netlify Drop** — drag the `web/` folder onto app.netlify.com/drop → instant URL.
-   - **GitHub Pages** — push `web/` to a repo, enable Pages.
-   - **Firebase Hosting** — `firebase init hosting` (public dir `web`) → `firebase deploy`.
+   - **Netlify Drop** — drag the repo folder onto app.netlify.com/drop → instant URL.
+   - **GitHub Pages** — push the repo, enable Pages from the repo root (`main` / `/`).
+   - **Firebase Hosting** — `firebase init hosting` (public dir `.`) → `firebase deploy`.
 2. **Real backend** — Firebase Auth (Google sign-in + phone OTP) + Firestore for posts/circles/chats,
    server-side moderation for the kindness check, and coarse geohash-to-neighbourhood bucketing so
    exact location is never stored.
