@@ -71,8 +71,11 @@ service cloud.firestore {
       allow write: if false;
     }
     
+    // Owner-only: a profile holds her Google fullName + email, and the app only ever
+    // reads the signed-in mom's own doc (getProfile(u.uid)). The Privacy & Terms page
+    // promises other moms never see her email, so other moms must not read this.
     match /profiles/{uid} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if request.auth != null && request.auth.uid == uid;
     }
 

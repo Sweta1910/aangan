@@ -327,12 +327,13 @@ class TestData(unittest.TestCase):
         # the bar there via .detail-nav. Onboarding still hides it outright.
         js, css = _read("app.js"), _read("styles.css")
         self.assertIn('var isDetail = !isOnboarding && out.tab === null && r.name !== "chats";', js)
-        self.assertIn("tabbar.hidden = isOnboarding;", js)
+        # Only extra hidden case: #privacy read from the welcome screen before joining.
+        self.assertIn('tabbar.hidden = isOnboarding || (r.name === "privacy" && !store.onboarded);', js)
         self.assertIn('tabbar.classList.toggle("detail-nav", isDetail);', js)
         self.assertNotIn('tabbar.hidden = isPreAuth', js)
         self.assertIn('data-act="back" aria-label="Back"', js)
         mobile = css.index(".tabbar.detail-nav { display: none; }")
-        desktop = css.index(".tabbar.detail-nav { display: flex; }")
+        desktop = css.index(".tabbar.detail-nav:not([hidden]) { display: flex; }")
         self.assertLess(mobile, css.index("@media (min-width: 900px)"))
         self.assertGreater(desktop, css.index("@media (min-width: 900px)"))
 
@@ -720,9 +721,9 @@ class TestOptionalCity(unittest.TestCase):
             self.assertNotIn(place, self.app, place)
 
     def test_profile_rules_allow_owner_to_write_city_unchanged(self):
-        # City rides on /profiles/{uid}; the existing owner-write rule already permits
-        # it, so no rules change (and no console re-publish) is needed.
-        self.assertIn("match /profiles/{uid} {\n      allow read: if request.auth != null;\n"
+        # City rides on /profiles/{uid}; the owner-write rule permits it. Since
+        # 2026-10-09 reads are owner-only too (profiles hold fullName + email).
+        self.assertIn("match /profiles/{uid} {\n      allow read: if request.auth != null && request.auth.uid == uid;\n"
                       "      allow write: if request.auth != null && request.auth.uid == uid;", self.rules)
 
     def test_css_for_gate_and_strip(self):
@@ -991,6 +992,65 @@ w.window = w;
 vm.runInContext(dataJs, vm.createContext(w)); vm.runInContext(appJs, w);
 const me = w.AANGAN.V.me().html;
 ok(me.includes('id="me-feedback"') && me.includes('Send feedback'), 'Me row: ' + me);
+console.log('OK');
+""" % WEB_DIR
+        r = subprocess.run([node, "-e", harness], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("OK", r.stdout)
+
+
+class TestPrivacyTerms(unittest.TestCase):
+    """2026-10-09: #privacy (Privacy & Terms) in plain language, linked from the
+    welcome screen, the feedback footer and Me. It must never show an email
+    address or a mailto: deletion requests go through Send feedback."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = _read("app.js")
+        cls.css = _read("styles.css")
+
+    def test_footer_and_css(self):
+        body = self.app[self.app.index("function feedbackFoot()"):self.app.index("function feedbackSheetHtml()")]
+        self.assertIn('href="#privacy" id="privacy-foot"', body)
+        self.assertIn('id="feedback-open"', body)
+        for sel in (".privacy-view", ".privacy-card", ".terms-line"):
+            self.assertIn(sel, self.css)
+
+    def test_not_legal_advice_note_is_code_comment_only(self):
+        self.assertIn("// NOT LEGAL ADVICE", self.app)
+
+    def test_rendered_privacy_welcome_me(self):
+        node = _node()
+        if not node:
+            self.skipTest("node not installed")
+        harness = r"""
+const fs = require('fs'), path = require('path'), vm = require('vm');
+const webDir = %r;
+const dataJs = fs.readFileSync(path.join(webDir, 'data.js'), 'utf8');
+const appJs = fs.readFileSync(path.join(webDir, 'app.js'), 'utf8');
+function ok(c, msg) { if (!c) throw new Error(msg); }
+const ls = { store: {}, getItem(k) { return this.store[k] || null; }, setItem(k, v) { this.store[k] = v; }, removeItem(k) { delete this.store[k]; } };
+const w = { location: { hash: '#privacy', search: '', hostname: 'localhost' }, localStorage: ls,
+  document: { addEventListener() {}, querySelector() { return null; }, getElementById() { return null; }, body: { setAttribute() {} } },
+  Backend: { isReal: true, user: { uid: 'u1' } }, console: console, setTimeout: setTimeout, clearTimeout: clearTimeout };
+w.window = w;
+vm.runInContext(dataJs, vm.createContext(w)); vm.runInContext(appJs, w);
+const pv = w.AANGAN.V.privacy();
+ok(pv.tab === null, 'privacy is a tab-less page');
+const h = pv.html;
+['Who can join', '18 and over', 'What we store', 'Google Firebase', 'What other moms see', 'Anonymous mom',
+ 'Anonymous posts', 'Not medical advice', 'local emergency number', 'href="#safety"', 'Community rules',
+ 'No ads, selling or spam', 'medical misinformation', 'Moderators may remove', 'Delete my account',
+ 'within 30 days', 'Send feedback', 'never sell your data', 'Changes to these terms', 'Last updated: 9 October 2026'
+].forEach(function (s) { ok(h.includes(s), 'missing: ' + s); });
+ok(!h.includes('@'), 'privacy page must not contain any email address');
+ok(!/mailto:/i.test(h), 'privacy page must not contain mailto');
+ok(!/legal advice/i.test(h), 'legal-advice note belongs in a code comment, not on the page');
+ok(!h.includes('Aangan'), 'old brand on privacy page');
+const wel = w.AANGAN.V.welcome().html;
+ok(wel.includes('id="welcome-terms"') && wel.includes('href="#privacy"') && wel.includes('By continuing you agree to our'), 'welcome terms line: ' + wel);
+const me = w.AANGAN.V.me().html;
+ok(me.includes('id="me-privacy"') && me.includes('href="#privacy"') && me.includes('Privacy &amp; Terms'), 'Me row: ' + me);
 console.log('OK');
 """ % WEB_DIR
         r = subprocess.run([node, "-e", harness], capture_output=True, text=True)

@@ -562,8 +562,9 @@ textarea.input { min-height: 140px; resize: none; line-height: 1.55; }
     padding: 0 32px;
     background: rgba(255, 253, 249, .96);
   }
-  /* Laptop: keep the top menu on post/chat pages (← back button stays in the view). */
-  .tabbar.detail-nav { display: flex; }
+  /* Laptop: keep the top menu on post/chat pages (← back button stays in the view).
+     :not([hidden]) so #privacy read before joining (hidden + detail-nav) stays hidden. */
+  .tabbar.detail-nav:not([hidden]) { display: flex; }
   .dt-logo {
     display: flex;
     align-items: center;
@@ -798,9 +799,22 @@ textarea.input { min-height: 140px; resize: none; line-height: 1.55; }
 }
 
 /* Feedback ("💬 Send feedback"): quiet footer link on main tabs + sheet. */
-.feedback-foot { display: flex; justify-content: center; padding: 18px 18px 28px; }
-.feedback-link { background: none; border: 1px dashed var(--line); border-radius: 999px; padding: 8px 16px; color: var(--ink); opacity: .75; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.feedback-foot { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; padding: 18px 18px 28px; }
+.feedback-link { background: none; border: 1px dashed var(--line); border-radius: 999px; padding: 8px 16px; color: var(--ink); opacity: .75; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
 .feedback-link:hover, .feedback-link:focus-visible { opacity: 1; color: var(--teal); border-color: var(--teal); }
+
+/* Privacy & Terms (#privacy): reuses settings-group/card; readable line length on laptops. */
+.privacy-view { max-width: 720px; margin: 0 auto; }
+.privacy-intro { margin: 16px 14px 0; padding: 18px 18px 16px; text-align: center; }
+.privacy-intro p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink-2); }
+.privacy-card { padding: 14px 16px; }
+.settings-group .privacy-card > * + * { border-top: none; }
+.privacy-card p { margin: 0 0 10px; font-size: 14px; line-height: 1.55; color: var(--ink); }
+.privacy-card p:last-child { margin-bottom: 0; }
+.privacy-card a, .terms-line a { color: var(--plum); font-weight: 600; }
+.privacy-list { margin: 0 0 10px; padding-left: 20px; font-size: 14px; line-height: 1.55; }
+.privacy-list li { margin-bottom: 4px; }
+.terms-line { margin-bottom: 8px; }
 .fb-sheet textarea { min-height: 96px; resize: vertical; }
 .fb-sheet .toggle-row { margin-top: 6px; }
 .fb-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }

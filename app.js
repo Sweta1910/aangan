@@ -419,6 +419,7 @@
       '<button class="btn btn-primary btn-block" data-act="start-phone-onboard" id="get-started">Continue with phone</button>' +
       '<button class="btn btn-ghost btn-block" data-act="skip-onboarding" id="have-account">I already have an account</button>' +
       '<p class="tiny" style="margin-bottom:8px;font-weight:600">Moms supporting moms — not a replacement for your doctor or therapist.</p>' +
+      '<p class="tiny terms-line" id="welcome-terms">By continuing you agree to our <a href="#privacy" id="welcome-privacy">Terms &amp; Privacy</a>.</p>' +
       '<p class="tiny">' + (isRealMode() ? "Real moms, real posts · sign in with Google to join" : "Prototype · all people, posts and places are fictional demo data") + '</p>' +
       "</div></div>" };
   };
@@ -779,6 +780,55 @@
       "</div>" };
   };
 
+  // ------------------------------------------------------- privacy & terms
+  // #privacy: plain, warm Privacy & Terms, linked from the welcome screen, the
+  // feedback footer and a Me row. Every "what we store" line mirrors what
+  // backend.js actually writes (profiles incl. Google fullName/email, posts/replies
+  // with uid + anon flag, reactions, reports, feedback with page + browser) and
+  // firestore.rules (profiles are owner-only, so other moms never read an email).
+  // Deliberately no email address and no mail link: deletion requests go through
+  // "Send feedback" while signed in, which ties the request to her account uid.
+  // NOT LEGAL ADVICE: a plain-language draft for a small beta. Have a lawyer review
+  // it (incl. India's DPDP Act and GDPR/US state laws for moms abroad) before launch.
+  var PRIVACY_UPDATED = "9 October 2026";
+  function privacySection(emoji, title, body) {
+    return '<section class="settings-group privacy-sec"><h3><span aria-hidden="true">' + emoji + "</span> " + title + '</h3><div class="card privacy-card">' + body + "</div></section>";
+  }
+  V.privacy = function () {
+    var name = esc(BRAND.name);
+    return { tab: null, html:
+      '<div class="view privacy-view"><header class="topbar"><h1>Privacy &amp; Terms</h1><button class="icon-btn" data-act="back" aria-label="Back">' + icon("back") + "</button></header>" +
+      '<div class="card privacy-intro"><div style="font-size:30px;margin-bottom:8px" aria-hidden="true">🤍</div>' +
+      "<p>" + name + " is a small, kind corner of the internet for moms. Here is, in plain words, who can join, what we keep, who sees what, and the few rules that keep it safe.</p></div>" +
+      privacySection("🌸", "Who can join",
+        "<p>" + name + " is for women aged 18 and over who are moms or moms-to-be. One account per person, please.</p>") +
+      privacySection("🗂️", "What we store",
+        "<p>When you sign in with Google, we receive your <b>name, email address and profile photo</b> from Google. We keep your name and email on your private profile so we know the account is yours.</p>" +
+        "<p>We also store what you add: your nickname, the stages and languages you pick, your <b>city if you add it</b>, your <b>posts and replies</b> (and whether each one is anonymous), the <b>reactions</b> you give, any posts you report, and <b>feedback notes</b> you send (with the page you sent them from and your browser type).</p>" +
+        "<p>All of this lives in <b>Google Firebase</b> (Firebase Authentication and Cloud Firestore). A few settings are also kept in your browser on this device.</p>") +
+      privacySection("👀", "What other moms see",
+        "<p>Other moms see your <b>nickname</b> (or <b>\u201cAnonymous mom\u201d</b>), your posts, your replies and reaction counts. They <b>never</b> see your email address, and your profile is readable only by you.</p>") +
+      privacySection("🫶", "Anonymous posts",
+        "<p>When you post anonymously, other moms see \u201cAnonymous mom\u201d instead of your name. The post is still saved with your account, so you can manage it and so moderators can act if it is reported.</p>") +
+      privacySection("🩺", "Not medical advice",
+        "<p>Moms supporting moms \u2014 " + name + " is not a replacement for your doctor, midwife or therapist. Advice here comes from other moms\u2019 experience, not from professionals.</p>" +
+        '<p><b>In an emergency, call your local emergency number now</b> (112 in India, 911 in the US and Canada, 999 in the UK). For support lines, see the <a href="#safety" id="privacy-safety">Safety centre &amp; crisis lines</a>.</p>') +
+      privacySection("🤝", "Community rules",
+        "<ul class=\"privacy-list\"><li>Be kind. No shaming, bullying or judging another mom\u2019s choices.</li>" +
+        "<li>No ads, selling or spam.</li>" +
+        "<li>No medical misinformation. Share your experience, and encourage moms to check with their doctor.</li>" +
+        "<li>Respect privacy: don\u2019t share another person\u2019s photos or personal details.</li></ul>" +
+        "<p>Moderators may remove posts or replies that break these rules, and may remove accounts that keep breaking them.</p>") +
+      privacySection("🗑️", "Deleting your account and data",
+        "<p>Sign in, tap <b>\u201cSend feedback\u201d</b> and write <b>\u201cDelete my account\u201d</b>. Because you are signed in, we know which account it is. We will delete your account and the data linked to it (profile, posts, replies, reactions and feedback) <b>within 30 days</b>.</p>") +
+      privacySection("🚫", "No ads, no selling",
+        "<p>We don\u2019t show ads and we never sell your data.</p>") +
+      privacySection("📝", "Changes to these terms",
+        "<p>If we change these terms, we will update this page and the date below. Using " + name + " after a change means you accept the updated terms.</p>") +
+      '<p class="footer-note" id="privacy-updated">Last updated: ' + PRIVACY_UPDATED + "</p>" +
+      "</div>" };
+  };
+
   V.me = function () {
     var p = store.profile;
     var authMethodLabel = (store.authMethod === "google" || store.verify.google) ? "Google" : "phone";
@@ -811,7 +861,8 @@
         '<button class="link-row" data-act="sign-out" id="sign-out">' + icon("reset") + '<span class="grow">Sign out</span>' + icon("chevron") + "</button></div></div>" :
         '<button class="link-row" data-act="reset" id="reset-demo">' + icon("reset") + '<span class="grow">Reset demo</span>' + icon("chevron") + "</button></div></div>") +
       '<div class="settings-group"><h3>Help us improve</h3><div class="card">' +
-      '<button class="link-row" data-act="feedback" id="me-feedback"><span aria-hidden="true">💬</span><span class="grow">Send feedback</span><span class="tiny">Tell us what you think</span>' + icon("chevron") + "</button></div></div>" +
+      '<button class="link-row" data-act="feedback" id="me-feedback"><span aria-hidden="true">💬</span><span class="grow">Send feedback</span><span class="tiny">Tell us what you think</span>' + icon("chevron") + "</button>" +
+      '<a class="link-row" href="#privacy" id="me-privacy" style="text-decoration:none;color:inherit"><span aria-hidden="true">📄</span><span class="grow">Privacy &amp; Terms</span><span class="tiny">What we store, the rules</span>' + icon("chevron") + "</a></div></div>" +
       '<p class="footer-note">' + esc(BRAND.name) + (isRealMode() ? " · v0.1 · beta" : " prototype · v0.1 · all data is fictional") + "</p></div>" };
   };
 
@@ -919,8 +970,10 @@
     // hides it on phones (bottom bar would crowd the reply/chat box) and styles.css
     // shows it again >= 900px, so laptops keep the top menu next to the ← button.
     // #chats keeps its old behaviour (bar visible everywhere).
+    // #privacy opened from the welcome screen (not joined yet) hides it entirely,
+    // so a visitor reading the terms isn't offered app tabs she can't use yet.
     var isDetail = !isOnboarding && out.tab === null && r.name !== "chats";
-    tabbar.hidden = isOnboarding;
+    tabbar.hidden = isOnboarding || (r.name === "privacy" && !store.onboarded);
     tabbar.classList.toggle("detail-nav", isDetail);
     var tabLinks = $("#tab-links") || tabbar;
     tabLinks.innerHTML = TABS.map(function (t) {
@@ -991,7 +1044,8 @@
   var fbDraft = freshFeedback();
   function feedbackKindLabel(k) { for (var i = 0; i < FEEDBACK_KINDS.length; i++) if (FEEDBACK_KINDS[i][0] === k) return FEEDBACK_KINDS[i][1]; return "Feedback"; }
   function feedbackFoot() {
-    return '<div class="feedback-foot"><button class="feedback-link" data-act="feedback" id="feedback-open">💬 Send feedback</button></div>';
+    return '<div class="feedback-foot"><button class="feedback-link" data-act="feedback" id="feedback-open">💬 Send feedback</button>' +
+      '<a class="feedback-link" href="#privacy" id="privacy-foot">📄 Privacy &amp; Terms</a></div>';
   }
   function feedbackSheetHtml() {
     var kinds = FEEDBACK_KINDS.map(function (k) {
@@ -1153,7 +1207,7 @@
     var act = el.getAttribute("data-act"), id = el.getAttribute("data-id");
     switch (act) {
       case "go": go(el.getAttribute("data-to")); break;
-      case "back": if (history.length > 1) history.back(); else go("#home"); break;
+      case "back": if (history.length > 1) history.back(); else go(store.onboarded ? "#home" : "#welcome"); break;
       case "google-signin": signInWithGoogle(undefined, el); break;
       case "pick-google-account": {
         var gName = el.getAttribute("data-name");
