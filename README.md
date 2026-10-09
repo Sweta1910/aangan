@@ -71,3 +71,13 @@ python3 scripts/screenshots.py
    moms, and get a proper logo/illustration set. Internal ids (repo, `aangan-6a58c` Firebase
    project, `aangan.*` storage keys) keep the old name on purpose.
 4. **Pilot** — 20–30 MV/Sunnyvale moms, measure weekly posts per member and hi→chat conversion.
+
+## Installable app (Add to Home Screen)
+
+`manifest.webmanifest`, `icons/` (regenerate with `python scripts/make_icons.py`)
+and `sw.js` make MomSakhi installable. The service worker caches only the
+same-origin app shell; it never intercepts Firebase, Google sign-in, gstatic
+or any other cross-origin request, so the live feed stays live.
+
+When you bump the `?v=` cache string in `index.html`, set the same value as
+`VERSION` in `sw.js` (a unit test checks this) so installed apps update.

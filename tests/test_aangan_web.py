@@ -1079,5 +1079,144 @@ class TestServedFromRoot(unittest.TestCase):
             self.assertIn("tmp/", f.read().split())
 
 
+def _png_size(path):
+    """(width, height) from the PNG IHDR chunk -- stdlib only, no Pillow."""
+    import struct
+    with open(path, "rb") as f:
+        head = f.read(24)
+    assert head[:8] == b"\x89PNG\r\n\x1a\n", path + " is not a PNG"
+    return struct.unpack(">II", head[16:24])
+
+
+class TestInstallablePWA(unittest.TestCase):
+    """2026-10-09: MomSakhi is installable (Add to Home Screen). manifest +
+    icons + a shell-only service worker that must NEVER intercept Firebase,
+    Firestore, Google sign-in, gstatic or any cross-origin request (the live
+    feed has to stay live), and that picks up a new deploy (network-first HTML,
+    VERSION tied to the ?v= cache string, skipWaiting + clients.claim)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = _read("index.html")
+        cls.sw = _read("sw.js")
+        cls.app = _read("app.js")
+        with open(os.path.join(APP_DIR, "manifest.webmanifest"), encoding="utf-8") as f:
+            cls.manifest = json.load(f)
+
+    def test_manifest_fields(self):
+        m = self.manifest
+        self.assertEqual(m["name"], "MomSakhi")
+        self.assertEqual(m["short_name"], "MomSakhi")
+        self.assertEqual(m["description"], load_data()["brand"]["tagline"])
+        self.assertEqual(m["start_url"], "./#home")
+        self.assertEqual(m["scope"], "./")
+        self.assertEqual(m["display"], "standalone")
+        css = _read("styles.css")
+        for key in ("theme_color", "background_color"):
+            self.assertRegex(m[key], r"^#[0-9A-Fa-f]{6}$")
+            self.assertIn(m[key].upper(), css.upper(), key + " must come from the styles.css palette")
+        self.assertIn('<meta name="theme-color" content="%s">' % m["theme_color"], self.html)
+
+    def test_icons_exist_with_right_sizes(self):
+        purposes = {}
+        for icon in self.manifest["icons"]:
+            path = os.path.join(APP_DIR, icon["src"])
+            self.assertTrue(os.path.exists(path), icon["src"])
+            w, h = _png_size(path)
+            self.assertEqual("%dx%d" % (w, h), icon["sizes"], icon["src"])
+            self.assertEqual(icon["type"], "image/png")
+            purposes.setdefault(icon["purpose"], set()).add(icon["sizes"])
+        self.assertEqual(purposes["any"], {"192x192", "512x512"})
+        self.assertEqual(purposes["maskable"], {"512x512"})
+        self.assertEqual(_png_size(os.path.join(APP_DIR, "icons/apple-touch-icon.png")), (180, 180))
+
+    def test_head_link_and_meta_tags(self):
+        for tag in ('<link rel="manifest" href="manifest.webmanifest">',
+                    '<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">',
+                    '<meta name="apple-mobile-web-app-capable" content="yes">',
+                    '<meta name="apple-mobile-web-app-title" content="MomSakhi">',
+                    '<meta name="mobile-web-app-capable" content="yes">'):
+            self.assertIn(tag, self.html)
+
+    def test_sw_registered_relative_with_scope(self):
+        self.assertIn('navigator.serviceWorker.register("sw.js", { scope: "./" })', self.app)
+        self.assertIn('window.addEventListener("beforeinstallprompt"', self.app)
+
+    def test_sw_version_matches_cache_string(self):
+        v = set(re.findall(r'\?v=([\da-f]{7})"', self.html))
+        self.assertEqual(len(v), 1)
+        self.assertIn('var VERSION = "%s";' % v.pop(), self.sw,
+                      "bump sw.js VERSION together with the ?v= cache string")
+
+    def test_sw_never_touches_firebase_google_or_cross_origin(self):
+        sw = self.sw
+        self.assertIn("if (url.origin !== self.location.origin) return;", sw)
+        self.assertIn('if (req.method !== "GET") return;', sw)
+        never = re.search(r"var NEVER = /(.+)/i;", sw).group(1)
+        for host in ("firestore", "googleapis", "gstatic", "firebase", "identitytoolkit", "securetoken"):
+            self.assertIn(host, never)
+        # The precache list is same-origin relative paths only.
+        shell = re.search(r"var SHELL = \[(.*?)\];", sw, re.S).group(1)
+        self.assertNotRegex(shell, r"https?:|//|firestore|googleapis|gstatic|firebase\.")
+        for f in ("index.html", "app.js", "backend.js", "styles.css", "manifest.webmanifest"):
+            self.assertIn(f, shell)
+        code = re.sub(r"/\*.*?\*/|//[^\n]*", "", sw, flags=re.S)
+        self.assertNotIn("googleapis.com", code.replace("googleapis|", ""))
+
+    def test_sw_picks_up_new_deploys(self):
+        self.assertIn("self.skipWaiting()", self.sw)
+        self.assertIn("self.clients.claim()", self.sw)
+        self.assertIn("if (isHtml) { event.respondWith(networkFirst(req)); return; }", self.sw)
+        self.assertIn("caches.delete(k)", self.sw)
+
+    def test_sw_js_syntax(self):
+        node = _node()
+        if not node:
+            self.skipTest("node not installed")
+        r = subprocess.run([node, "--check", os.path.join(APP_DIR, "sw.js")], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_install_hint_once_on_home_after_sign_in(self):
+        node = _node()
+        if not node:
+            self.skipTest("node not installed")
+        harness = r"""
+const fs = require('fs'), path = require('path'), vm = require('vm');
+const webDir = %r;
+const dataJs = fs.readFileSync(path.join(webDir, 'data.js'), 'utf8');
+const appJs = fs.readFileSync(path.join(webDir, 'app.js'), 'utf8');
+function ok(c, msg) { if (!c) throw new Error(msg); }
+const IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+const ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36';
+function boot(ua, ls, backend, standalone, onboarded) {
+  ls.store['aangan.demo.v1'] = JSON.stringify({ onboarded: onboarded !== false });
+  const w = { location: { hash: '#home', search: '', hostname: 'localhost' }, localStorage: ls,
+    navigator: { userAgent: ua, standalone: !!standalone },
+    document: { addEventListener() {}, querySelector() { return null; }, getElementById() { return null; }, body: { setAttribute() {} } },
+    Backend: backend, console: console, setTimeout: setTimeout, clearTimeout: clearTimeout };
+  w.window = w;
+  vm.runInContext(dataJs, vm.createContext(w)); vm.runInContext(appJs, w);
+  return w.AANGAN;
+}
+function newLs() { return { store: {}, getItem(k) { return this.store[k] || null; }, setItem(k, v) { this.store[k] = v; }, removeItem(k) { delete this.store[k]; } }; }
+const signedIn = { isReal: true, user: { uid: 'u1' }, posts: [] };
+let ls = newLs();
+let A = boot(IOS, ls, signedIn);
+let h = A.V.home().html;
+ok(h.includes('id="install-hint"') && h.includes('Tap Share → Add to Home Screen.'), 'iOS tip on home: ' + h);
+ok(A.V.home().html.includes('id="install-hint"'), 'stays for the rest of this session');
+ok(ls.store['aangan.installHint.v1'] === '1', 'marked shown');
+ok(!boot(IOS, ls, signedIn).V.home().html.includes('install-hint'), 'never shown twice');
+ok(!A.V.welcome().html.includes('install-hint'), 'never on welcome');
+ok(!boot(IOS, newLs(), { isReal: true, user: null, posts: [] }).V.home().html.includes('install-hint'), 'not before sign-in');
+ok(!boot(IOS, newLs(), signedIn, true).V.home().html.includes('install-hint'), 'not when installed');
+ok(!boot(ANDROID, newLs(), signedIn).V.home().html.includes('install-hint'), 'Android waits for beforeinstallprompt');
+console.log('OK');
+""" % WEB_DIR
+        r = subprocess.run([node, "-e", harness], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("OK", r.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

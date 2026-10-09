@@ -301,6 +301,12 @@ textarea.input { min-height: 140px; resize: none; line-height: 1.55; }
 .replies-count svg { width: 15px; height: 15px; }
 .kind-banner { margin: 0 14px 14px; padding: 14px 16px; display: flex; gap: 12px; align-items: center; border-radius: var(--r-lg); background: linear-gradient(120deg, var(--plum), #6E3A5E); color: #fff; box-shadow: var(--shadow-1); }
 .kind-banner .kb-i { font-size: 24px; }
+/* Add to Home Screen hint (Home, once per device). */
+.install-hint { margin: 12px 14px 0; padding: 12px 12px 12px 14px; display: flex; gap: 10px; align-items: center; background: var(--marigold-soft); border: 1px solid var(--line); }
+.install-hint .ih-i { font-size: 22px; }
+.install-hint b { display: block; font-size: 14px; }
+.install-hint span:not(.ih-i) { display: block; font-size: 12.5px; color: var(--text-muted, #6b5a52); }
+.install-hint .icon-btn { width: 32px; height: 32px; font-size: 14px; }
 .kind-banner b { display: block; font-size: 14px; }
 .kind-banner span { font-size: 12.5px; opacity: .85; }
 .circle-hero { margin: 0 14px 14px; padding: 18px; display: flex; gap: 14px; align-items: center; }

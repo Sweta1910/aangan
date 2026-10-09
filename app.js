@@ -503,6 +503,49 @@
       '<a class="icon-btn" href="#chats" aria-label="Messages" id="open-chats">' + icon("chat") + '<span class="dot"></span></a></header>';
   }
 
+  // ------------------------------------------------ Add to Home Screen hint
+  // Shown on Home only (never on the welcome screen: one ask at a time), at most
+  // once per device: the first time we decide to show it we set INSTALL_KEY, and
+  // keep showing it for the rest of that page session until she taps x / Add.
+  // Android/desktop Chrome: only when the browser has offered beforeinstallprompt
+  // (so the Add button really works). iOS Safari has no prompt API, so a short
+  // "Tap Share -> Add to Home Screen" tip instead. Never inside an in-app browser
+  // or when already running as the installed app.
+  var INSTALL_KEY = "aangan.installHint.v1";
+  var installPrompt = null, installHintLive = false;
+  function nav() { return typeof navigator !== "undefined" ? navigator : {}; }
+  function isStandalone() {
+    try {
+      if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return true;
+    } catch (e) { /* ignore */ }
+    return nav().standalone === true;
+  }
+  function isIOS(ua) { return /iPhone|iPad|iPod/.test(ua || ""); }
+  function installHintKind(ua) {
+    if (isStandalone()) return null;
+    if (installPrompt) return "prompt";
+    if (isIOS(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua) && !(window.AANGAN && window.AANGAN.inAppBrowser && window.AANGAN.inAppBrowser(ua))) return "ios";
+    return null;
+  }
+  function installHint() {
+    if (!store.onboarded || (isRealMode() && !window.Backend.user)) return "";
+    var kind = installHintKind(nav().userAgent || "");
+    if (!kind) return "";
+    if (!installHintLive) {
+      var seen = null;
+      try { seen = localStorage.getItem(INSTALL_KEY); } catch (e) { /* ignore */ }
+      if (seen) return "";
+      try { localStorage.setItem(INSTALL_KEY, "1"); } catch (e) { /* ignore */ }
+      installHintLive = true;
+    }
+    var body = kind === "prompt"
+      ? "<b>Add " + esc(BRAND.name) + " to your home screen</b><span>Opens like an app, one tap away.</span>"
+      : "<b>Add " + esc(BRAND.name) + " to your home screen</b><span>Tap Share → Add to Home Screen.</span>";
+    return '<div class="card install-hint" id="install-hint"><span class="ih-i" aria-hidden="true">📲</span><div class="grow">' + body + "</div>" +
+      (kind === "prompt" ? '<button class="btn btn-primary btn-sm" data-act="install-app" id="install-app">Add</button>' : "") +
+      '<button class="icon-btn" data-act="install-dismiss" id="install-dismiss" aria-label="Dismiss">✕</button></div>';
+  }
+
   V.home = function () {
     var circles = D.circles.map(function (c) {
       return '<a class="card circle-card" href="#circle/' + c.id + '" style="text-decoration:none;color:inherit"><span class="ce">' + c.emoji + "</span><b>" + esc(c.name) + "</b><span>" + c.members + " moms</span></a>";
@@ -510,7 +553,7 @@
     var feed = allPosts().map(function (p) { return postCard(p); }).join("");
     return { tab: "home", html:
       '<div class="view">' + homeTop() +
-      '<div class="hello"><h2>' + greeting() + ", " + esc(store.profile.nickname) + ' <span aria-hidden="true">🌼</span></h2><p>Here\'s what moms near you are talking about.</p></div>' +
+      '<div class="hello"><h2>' + greeting() + ", " + esc(store.profile.nickname) + ' <span aria-hidden="true">🌼</span></h2><p>Here\'s what moms near you are talking about.</p></div>' + installHint() +
       '<div class="section" style="padding:0;margin-top:14px"><div class="section-head" style="padding:0 18px"><h2>Your circles</h2><span class="muted">Swipe →</span></div>' +
       '<div class="circles-row">' + circles + "</div></div>" +
       '<div class="kind-banner"><span class="kb-i">💛</span><div><b>A kind space, always</b><span>Supportive reactions only — no downvotes, no shaming.</span></div></div>' +
@@ -1209,6 +1252,13 @@
       case "go": go(el.getAttribute("data-to")); break;
       case "back": if (history.length > 1) history.back(); else go(store.onboarded ? "#home" : "#welcome"); break;
       case "google-signin": signInWithGoogle(undefined, el); break;
+      case "install-dismiss": installHintLive = false; var ih = $("#install-hint"); if (ih) ih.remove(); break;
+      case "install-app": {
+        var pr = installPrompt; installPrompt = null; installHintLive = false;
+        var ihb = $("#install-hint"); if (ihb) ihb.remove();
+        if (pr && pr.prompt) { pr.prompt(); if (pr.userChoice) pr.userChoice.then(function (c) { if (c && c.outcome === "accepted") toast("Added to your home screen ✓"); }); }
+        break;
+      }
       case "pick-google-account": {
         var gName = el.getAttribute("data-name");
         var gEmail = el.getAttribute("data-email");
@@ -1746,6 +1796,23 @@
       render(); 
     });
     showcase();
+    // Installable app: register the shell-only worker (relative URL + scope so it
+    // works under /momsakhi/ on Pages and at / on localhost) and keep Chrome's
+    // install prompt for the Home hint instead of its default mini-infobar.
+    if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+      navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(function (e) {
+        console.warn("MomSakhi: service worker not registered", e);
+      });
+    }
+    window.addEventListener("beforeinstallprompt", function (e) {
+      e.preventDefault();
+      installPrompt = e;
+      if (parseHash().name === "home" && !$("#install-hint")) rerender();
+    });
+    window.addEventListener("appinstalled", function () {
+      installPrompt = null; installHintLive = false;
+      var ih = $("#install-hint"); if (ih) ih.remove();
+    });
     if (window.Backend && window.Backend.ready) {
       window.Backend.ready.then(function() {
         if (window.Backend.isReal) {
