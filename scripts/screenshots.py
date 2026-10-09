@@ -1,4 +1,4 @@
-"""Capture phone-size screenshots of every Aangan screen with headless Chromium.
+"""Capture phone-size screenshots of every MomSakhi screen with headless Chromium.
 
 Why a script (not manual screenshots): the prototype is meant to be iterated on,
 so re-shooting all screens must be one command. It serves web/ on a

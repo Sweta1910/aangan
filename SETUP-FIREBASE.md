@@ -1,4 +1,4 @@
-# Setting up real accounts in Aangan
+# Setting up real accounts in MomSakhi
 
 Follow these steps to enable real Google sign-in and live shared posts (Real Mode). It takes about 5 minutes and the free "Spark" plan is all you need.
 

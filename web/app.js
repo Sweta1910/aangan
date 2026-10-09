@@ -1,4 +1,4 @@
-/* Aangan prototype — single-file SPA, zero backend.
+/* MomSakhi prototype — single-file SPA, zero backend.
  *
  * Why this shape: the prototype must open from `python3 -m http.server` (or even
  * file://) with no build step, so it is plain ES2017 in one IIFE. Views are pure
@@ -297,7 +297,8 @@
       '<div class="toran" aria-hidden="true"></div>' + mandala() +
       '<div class="welcome-hero">' +
       '<div class="logo">' + logoMark() + '<span class="logo-word" style="font-size:28px">' + esc(BRAND.name) + "</span></div>" +
-      "<h1>No judgement.<br><em>Just moms.</em></h1>" +
+      "<h1>" + esc(BRAND.tagline).replace("sakhi", "<em>sakhi</em>") + "</h1>" +
+      '<p class="sakhi-note"><b>Sakhi</b> (सखी) means a close friend — no judgement, just moms.</p>' +
       "<p>" + esc(BRAND.blurb) + "</p></div>" +
       '<div class="promise">' +
       promiseRow("🤍", "var(--plum-soft)", "Women-only & verified", "Every member is verified by phone or Google") +
@@ -444,7 +445,7 @@
       '<div class="field"><label for="ask-title">Your question</label><input class="input" id="ask-title" data-input="ask-title" maxlength="140" placeholder="e.g. How did you handle the first week of daycare?" value="' + esc(askDraft.title) + '"></div>' +
       '<div class="field"><label for="ask-body">Add details <span class="tiny">(optional)</span></label><textarea class="input" id="ask-body" data-input="ask-body" maxlength="1200" placeholder="Share as much or as little as you like. This is a safe space.">' + esc(askDraft.body) + "</textarea>" +
       '<p class="demo-link">✨ <button class="link" data-act="ask-demo" id="kindness-demo">See the kindness check in action</button></p></div>' +
-      '<div class="card toggle-row" style="margin-top:16px"><div class="grow"><b>Post anonymously</b><span>' + (askDraft.anon ? 'Hidden from other moms. Aangan\'s moderators can see who posted, for safety.' : "Shown as " + esc(store.profile.nickname)) + "</span></div>" + switchEl(askDraft.anon, "ask-anon", "Post anonymously") + "</div>" +
+      '<div class="card toggle-row" style="margin-top:16px"><div class="grow"><b>Post anonymously</b><span>' + (askDraft.anon ? 'Hidden from other moms. ' + esc(BRAND.name) + '\'s moderators can see who posted, for safety.' : "Shown as " + esc(store.profile.nickname)) + "</span></div>" + switchEl(askDraft.anon, "ask-anon", "Post anonymously") + "</div>" +
       '<div class="anon-preview">' + avatar(askDraft.anon ? null : store.profile.nickname, D.me.hue, "sm") + "<span>Posting as <b>" + (askDraft.anon ? "Anonymous mom" : esc(store.profile.nickname)) + "</b></span></div>" +
       '<div id="ask-nudge-slot">' + (askDraft.nudge ? nudgeHtml(askDraft.body || askDraft.title, askDraft.nudge, "ask") : "") + "</div>" +
       '<div style="margin-top:18px"><button class="btn btn-primary btn-block" data-act="ask-post" id="ask-post"' + (canPost ? "" : " disabled") + ">Post question</button>" +
@@ -702,13 +703,13 @@
       window.Backend.getPost(pid).then(function (d) {
         modState.postCache[pid] = d;
         if (parseHash().name === "mod") rerender();
-      }).catch(function (e) { console.error("Aangan: couldn't load reported post", e); modState.postCache[pid] = null; });
+      }).catch(function (e) { console.error("MomSakhi: couldn't load reported post", e); modState.postCache[pid] = null; });
     }
     return undefined;
   }
   V.mod = function () {
     var head = '<div class="view"><header class="topbar"><h1>Moderation</h1><button class="icon-btn" data-act="back" aria-label="Back">' + icon("back") + "</button></header>";
-    if (!canModerate()) return { tab: "me", html: head + emptyState("🔒", "Moderators only", "This page is for Aangan moderators.") + "</div>" };
+    if (!canModerate()) return { tab: "me", html: head + emptyState("🔒", "Moderators only", "This page is for " + esc(BRAND.name) + " moderators.") + "</div>" };
     var list = modReports().map(function (r) {
       var p = modPost(r.postId);
       var title = p ? (p.title || "(no title)") : (p === null ? "Post already removed or not found" : "Loading post…");
@@ -724,7 +725,7 @@
     }).join("");
     return { tab: "me", html: head +
       '<p class="muted" style="padding:0 18px 6px;font-size:14px">' + (isRealMode() ? "Reported posts, newest first. Removing deletes the post, its replies and its reports for everyone." : "Demo mode: reports you make on this device show up here.") + "</p>" +
-      (list || emptyState("🌿", "No open reports", "All clear. Thank you for keeping Aangan kind.")) + "</div>" };
+      (list || emptyState("🌿", "No open reports", "All clear. Thank you for keeping " + esc(BRAND.name) + " kind.")) + "</div>" };
   };
 
   // --------------------------------------------------------------- router
@@ -819,7 +820,7 @@
   function errCode(e) { return String((e && (e.code || e.message)) || "error").replace(/^(firestore|auth)\//, ""); }
   function failToast(what, btn) {
     return function (e) {
-      console.error("Aangan: couldn't " + what, e);
+      console.error("MomSakhi: couldn't " + what, e);
       if (btn) btn.disabled = false;
       toast("Couldn't " + what + " yet (" + errCode(e) + "). Please try again.");
     };
@@ -1317,7 +1318,7 @@
       if (kind === "posts") { B._unsubPosts = null; live.postsDead = true; }
       else { B._unsubReplies = null; live.repliesDead = true; }
       if (live.retry === 0) failToast(what, null)(e);
-      else console.error("Aangan: listener failed again (" + kind + ")", e);
+      else console.error("MomSakhi: listener failed again (" + kind + ")", e);
       var wait = Math.min(60000, 2000 * Math.pow(2, live.retry++));
       clearTimeout(live.timer);
       live.timer = setTimeout(reviveListeners, wait);
@@ -1359,7 +1360,7 @@
         var n = parseHash().name; if (n === "mod" || n === "me") rerender();
       }, failToast("load reports", null));
       var n2 = parseHash().name; if (n2 === "mod" || n2 === "me") rerender();
-    }).catch(function (e) { console.warn("Aangan: moderator check failed (treated as not a moderator)", e); });
+    }).catch(function (e) { console.warn("MomSakhi: moderator check failed (treated as not a moderator)", e); });
   }
   function syncPosts() {
     var B = window.Backend;

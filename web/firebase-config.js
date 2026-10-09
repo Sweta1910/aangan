@@ -1,6 +1,7 @@
 // web/firebase-config.js
-// Aangan's Firebase web config (project "aangan-6a58c", created by Sweta on her
-// personal Google account, 2026-10-08).
+// MomSakhi's Firebase web config (project "aangan-6a58c", created by Sweta on her
+// personal Google account, 2026-10-08; the project id predates the rename to
+// MomSakhi and cannot be changed -- it is not shown to users).
 //
 // The web apiKey is NOT a secret: every Firebase web app ships it to the browser.
 // Security comes from firestore.rules (published in the Firebase console) and the

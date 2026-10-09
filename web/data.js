@@ -1,7 +1,7 @@
 window.AANGAN_DATA = {
   "brand": {
-    "name": "Aangan",
-    "tagline": "No judgement. Just moms.",
+    "name": "MomSakhi",
+    "tagline": "A sakhi for every stage of motherhood.",
     "blurb": "A kind, women-only space for Indian moms to share, ask and meet up nearby."
   },
   "me": {

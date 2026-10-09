@@ -1,4 +1,4 @@
-"""Structural tests for the Aangan web prototype (web/).
+"""Structural tests for the MomSakhi web prototype (web/).
 
 These are stdlib-only and fast: they prove the static app is complete and
 self-consistent without a browser. Rendering and click-path coverage lives
@@ -106,9 +106,10 @@ class TestData(unittest.TestCase):
         cls.d = load_data()
 
     def test_brand_is_single_constant(self):
-        self.assertEqual(self.d["brand"]["name"], "Aangan")
-        self.assertIn("No judgement", self.d["brand"]["tagline"])
+        self.assertEqual(self.d["brand"]["name"], "MomSakhi")
+        self.assertEqual(self.d["brand"]["tagline"], "A sakhi for every stage of motherhood.")
         # app.js must read the name from data, never hard-code it.
+        self.assertNotIn('"MomSakhi"', _read("app.js"))
         self.assertNotIn('"Aangan"', _read("app.js"))
 
     def test_launch_city_live_others_soon(self):
@@ -495,6 +496,12 @@ function runMode(isReal) {
   const welcome = V.welcome().html;
   const me = V.me().html;
   const verify = V['onboard/verify']().html;
+  if (!welcome.includes('MomSakhi') || !welcome.includes('<em>sakhi</em> for every stage of motherhood.')) {
+    throw new Error('Welcome missing MomSakhi name/tagline: ' + welcome);
+  }
+  if (/Aangan/.test(welcome + me + verify)) {
+    throw new Error('Rendered screen still says Aangan');
+  }
   if (isReal) {
     if (welcome.includes('fictional') || welcome.includes('demo data') || welcome.includes('Prototype')) {
       throw new Error('Real mode welcome contains fictional/demo text: ' + welcome);
@@ -530,6 +537,34 @@ console.log('OK');
         r = subprocess.run([node, "-e", harness], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("OK", r.stdout)
+
+
+class TestRebrandMomSakhi(unittest.TestCase):
+    """The app was renamed Aangan -> MomSakhi. No user-visible "Aangan" may come back,
+    but internal ids keep the old name on purpose (renaming them would log everyone
+    out / orphan data): localStorage keys, the AANGAN_DATA global, the Firebase
+    project id aangan-6a58c. Case-sensitive "Aangan" only ever meant the brand."""
+
+    VISIBLE = ["web/index.html", "web/app.js", "web/data.js", "web/styles.css",
+               "index.html", "README.md", "SETUP-FIREBASE.md"]
+
+    def test_no_user_visible_aangan(self):
+        root = os.path.dirname(WEB_DIR)
+        for rel in self.VISIBLE:
+            with open(os.path.join(root, rel), encoding="utf-8") as f:
+                hits = [i + 1 for i, line in enumerate(f) if "Aangan" in line]
+            self.assertEqual(hits, [], f"user-visible 'Aangan' left in {rel} at lines {hits}")
+
+    def test_brand_shown_in_title_and_meta(self):
+        html = _read("index.html")
+        self.assertIn("<title>MomSakhi — A sakhi for every stage of motherhood.</title>", html)
+        self.assertIn('<meta property="og:site_name" content="MomSakhi">', html)
+
+    def test_internal_ids_kept(self):
+        app = _read("app.js")
+        self.assertIn('var STORE_KEY = "aangan.demo.v1";', app)
+        self.assertIn("window.AANGAN_DATA", app)
+        self.assertIn('projectId: "aangan-6a58c"', _read("firebase-config.js"))
 
 
 class TestModeration(unittest.TestCase):
