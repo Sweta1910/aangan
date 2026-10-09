@@ -610,9 +610,14 @@
   };
 
 
-  // Helplines verified 2026-10-08. PSI (postpartum.net/get-help/psi-helpline/): call 1-800-944-4773,
-  // text "HELP" to 800-944-4773; PSI says it is NOT a crisis hotline. 988: 988lifeline.org.
-  // National Maternal Mental Health Hotline 1-833-852-6262 (HRSA, mchb.hrsa.gov; 24/7 call/text).
+  // Helplines re-verified 2026-10-09 against official pages:
+  // - PSI (postpartum.net/get-help/psi-helpline/): call 1-800-944-4773 (#1 Espanol, #2 English);
+  //   text "Help" to 800-944-4773 (English); text en Espanol 971-203-7773; messages returned daily
+  //   8am-11pm ET; PSI says it is NOT a crisis hotline.
+  // - 988 (988lifeline.org): call, text or chat (chat.988lifeline.org), 24/7/365, free, confidential;
+  //   text and chat also in Spanish.
+  // - National Maternal Mental Health Hotline 1-833-852-6262 / 1-833-TLC-MAMA (HRSA,
+  //   mchb.hrsa.gov/national-maternal-mental-health-hotline): call or text, 24/7, English & Spanish.
   // Demo only: a real launch needs server-side moderation and trained human review.
   V.safety = function () {
     return { tab: "me", html:
@@ -621,15 +626,17 @@
       '<div style="font-size:32px;margin-bottom:12px">🤍</div>' +
       '<h2 style="margin-bottom:8px">You deserve support right away</h2>' +
       '<p class="muted">The first two lines are free, confidential, and open 24/7.</p></div>' +
-      '<div class="settings-group"><h3>National Maternal Mental Health Hotline</h3><div class="card">' +
+      '<div class="settings-group"><h3>National Maternal Mental Health Hotline</h3><p class="muted" style="font-size:13px;margin:0 4px 8px">Call or text 1-833-TLC-MAMA \u00b7 24/7 \u00b7 English &amp; Spanish</p><div class="card">' +
       '<a class="link-row" href="tel:18338526262" style="text-decoration:none;color:inherit">' + icon("phone") + '<span class="grow">Call 1-833-852-6262</span>' + icon("chevron") + "</a>" +
       '<a class="link-row" href="sms:18338526262" style="text-decoration:none;color:inherit">' + icon("chat") + '<span class="grow">Text 1-833-852-6262</span>' + icon("chevron") + "</a></div></div>" +
-      '<div class="settings-group"><h3>988 Suicide & Crisis Lifeline</h3><div class="card">' +
+      '<div class="settings-group"><h3>988 Suicide & Crisis Lifeline</h3><p class="muted" style="font-size:13px;margin:0 4px 8px">Call, text or chat \u00b7 24/7 \u00b7 Spanish available</p><div class="card">' +
       '<a class="link-row" href="tel:988" style="text-decoration:none;color:inherit">' + icon("phone") + '<span class="grow">Call 988</span>' + icon("chevron") + "</a>" +
-      '<a class="link-row" href="sms:988" style="text-decoration:none;color:inherit">' + icon("chat") + '<span class="grow">Text 988</span>' + icon("chevron") + "</a></div></div>" +
-      '<div class="settings-group"><h3>Postpartum Support International (support, not a crisis line)</h3><div class="card">' +
-      '<a class="link-row" href="tel:18009444773" style="text-decoration:none;color:inherit">' + icon("phone") + '<span class="grow">Call 1-800-944-4773</span>' + icon("chevron") + "</a>" +
-      '<a class="link-row" href="sms:18009444773&body=HELP" style="text-decoration:none;color:inherit">' + icon("chat") + '<span class="grow">Text \u201cHELP\u201d to 800-944-4773 (English)</span>' + icon("chevron") + "</a></div></div>" +
+      '<a class="link-row" href="sms:988" style="text-decoration:none;color:inherit">' + icon("chat") + '<span class="grow">Text 988</span>' + icon("chevron") + "</a>" +
+      '<a class="link-row" href="https://chat.988lifeline.org/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">' + icon("chat") + '<span class="grow">Chat online at 988lifeline.org</span>' + icon("chevron") + "</a></div></div>" +
+      '<div class="settings-group"><h3>Postpartum Support International (support, not a crisis line)</h3><p class="muted" style="font-size:13px;margin:0 4px 8px">Leave a message any day \u2014 they reply 8am\u201311pm ET. English &amp; Spanish.</p><div class="card">' +
+      '<a class="link-row" href="tel:18009444773" style="text-decoration:none;color:inherit">' + icon("phone") + '<span class="grow">Call 1-800-944-4773 (#1 Espa\u00f1ol, #2 English)</span>' + icon("chevron") + "</a>" +
+      '<a class="link-row" href="sms:18009444773&body=HELP" style="text-decoration:none;color:inherit">' + icon("chat") + '<span class="grow">Text \u201cHelp\u201d to 800-944-4773 (English)</span>' + icon("chevron") + "</a>" +
+      '<a class="link-row" href="sms:19712037773" style="text-decoration:none;color:inherit">' + icon("chat") + '<span class="grow">Texto en espa\u00f1ol: 971-203-7773</span>' + icon("chevron") + "</a></div></div>" +
       '<p class="footer-note">If you or your baby are in immediate danger, call 911.<br><br>Moms supporting moms \u2014 not a replacement for your doctor or therapist.</p>' +
       "</div>" };
   };

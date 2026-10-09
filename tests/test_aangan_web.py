@@ -170,6 +170,10 @@ class TestData(unittest.TestCase):
         self.assertIn("1-833-852-6262", app_js)
         self.assertIn("988", app_js)
         self.assertIn("1-800-944-4773", app_js)
+        # 2026-10-09 re-verification: PSI Spanish text line, 988 chat, hotline languages.
+        self.assertIn("sms:19712037773", app_js)
+        self.assertIn("https://chat.988lifeline.org/", app_js)
+        self.assertIn("1-833-TLC-MAMA", app_js)
         self.assertIn("WORRY_PHRASES", app_js)
 
     def test_no_soon_stub_for_safety(self):
