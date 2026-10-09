@@ -50,6 +50,14 @@
   function str(v, fallback) { return (typeof v === "string") ? v : (v == null ? fallback : String(v)); }
   // JSON round-trip drops undefined values (Firestore rejects them) and functions.
   function plain(obj) { return JSON.parse(JSON.stringify(obj || {})); }
+  // Pure so tests can call it with fake location objects (Backend._useEmulators).
+  function useEmulators(loc) {
+    if (!loc) return false;
+    var host = loc.hostname;
+    if (host !== "localhost" && host !== "127.0.0.1") return false;
+    return /(^\?|&)emu=1(&|$)/.test(loc.search || "");
+  }
+  Backend._useEmulators = useEmulators;
 
   if (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && window.FIREBASE_CONFIG.apiKey.indexOf("PASTE") === -1) {
     Backend.ready = Promise.all([
@@ -60,6 +68,15 @@
       var app = modules[0].initializeApp(window.FIREBASE_CONFIG);
       var auth = modules[1].getAuth(app);
       var db = modules[2].getFirestore(app);
+
+      // Local test hook: point at the Firebase Local Emulator Suite (fake Google
+      // accounts, same firestore.rules) ONLY on localhost/127.0.0.1 AND with ?emu=1.
+      // The live site (sweta1910.github.io) can never satisfy the hostname check.
+      if (useEmulators(window.location)) {
+        modules[1].connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+        modules[2].connectFirestoreEmulator(db, "127.0.0.1", 8080);
+        Backend.usingEmulators = true;
+      }
 
       Backend.isReal = true;
       Backend._auth = auth;

@@ -271,6 +271,28 @@ class TestData(unittest.TestCase):
         self.assertIn('PASTE', js)
         self.assertIn('isReal = false', js)
 
+    def test_emulator_hook_only_on_localhost_with_flag(self):
+        # The emulator hook must be impossible to trigger on the live site.
+        js = _read("backend.js")
+        self.assertIn("if (useEmulators(window.location))", js)
+        node = shutil.which("node") or os.path.expanduser("~/.local/bin/node")
+        if not os.path.exists(node):
+            self.skipTest("node not available")
+        harness = (
+            "global.window=global;" + js +
+            ";var f=window.Backend._useEmulators;var cases=["
+            "[{hostname:'localhost',search:'?emu=1'},true],"
+            "[{hostname:'127.0.0.1',search:'?a=b&emu=1'},true],"
+            "[{hostname:'localhost',search:''},false],"
+            "[{hostname:'localhost',search:'?emu=10'},false],"
+            "[{hostname:'sweta1910.github.io',search:'?emu=1'},false],"
+            "[{hostname:'localhost.evil.com',search:'?emu=1'},false],"
+            "[null,false]];"
+            "cases.forEach(function(c){if(f(c[0])!==c[1]){console.log('FAIL '+JSON.stringify(c));process.exit(1);}});"
+            "console.log('ok');")
+        r = subprocess.run([node, "-e", harness], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
     def test_firestore_rules(self):
         with open(os.path.join(os.path.dirname(WEB_DIR), "firestore.rules")) as f:
             rules = f.read()
