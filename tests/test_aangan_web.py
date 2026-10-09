@@ -419,8 +419,8 @@ class TestRealModeHardening(unittest.TestCase):
 
     def test_listeners_have_error_callbacks_and_wait_for_sign_in(self):
         # posts, replies, reports: every listener has an error callback.
-        self.assertEqual(self.backend.count("onSnapshot(q, function(snap)"), 3)
-        self.assertEqual(self.backend.count("if (onError) onError(e);"), 4)  # posts, replies, reports, my reactions
+        self.assertEqual(self.backend.count("onSnapshot(q, function(snap)"), 4)  # + feedback (moderators)
+        self.assertEqual(self.backend.count("if (onError) onError(e);"), 5)  # posts, replies, reports, my reactions, feedback (mods)
         self.assertIn("if (!B.user) { B.posts = []; return; }", self.app)
 
     def test_posts_and_replies_listeners_self_heal_without_polling(self):
@@ -899,6 +899,94 @@ ok(h.includes('aria-pressed="false" aria-label="Hug (3)"'), 'other uid cache lea
 // Demo keeps local behaviour: fictional count + her toggle.
 h = boot({ isReal: false }, { onboarded: true, reacted: { 'ppf1:hug': true } }).V.home().html;
 ok(/aria-pressed="true" aria-label="Hug \(25\)"/.test(h), 'demo +1: ' + h);
+console.log('OK');
+""" % WEB_DIR
+        r = subprocess.run([node, "-e", harness], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("OK", r.stdout)
+
+
+class TestFeedback(unittest.TestCase):
+    """2026-10-09: "💬 Send feedback" -- write-only /feedback for signed-in moms,
+    readable only by moderators. Live proof: state/scratch/aangan_e2e/feedback_e2e.py."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = _read("app.js")
+        cls.backend = _read("backend.js")
+        cls.css = _read("styles.css")
+        with open(os.path.join(APP_DIR, "firestore.rules"), encoding="utf-8") as f:
+            cls.rules = f.read()
+
+    def _block(self):
+        i = self.rules.index("match /feedback/{feedbackId}")
+        return self.rules[i:self.rules.index("\n    }", i)]
+
+    def test_rules_create_only_shape_and_moderator_read(self):
+        b = self._block()
+        self.assertIn("request.resource.data.uid == request.auth.uid", b)
+        self.assertIn("keys().hasOnly(['uid', 'text', 'kind', 'contactOk', 'page', 'ua', 'createdAt'])", b)
+        self.assertIn("request.resource.data.text.size() >= 1", b)
+        self.assertIn("request.resource.data.text.size() <= 1000", b)
+        self.assertIn("in ['idea', 'bug', 'unsafe', 'other', null]", b)
+        self.assertIn("allow read: if isModerator();", b)
+        for bad in ("allow update", "allow delete", "allow write", "allow read: if request.auth != null"):
+            self.assertNotIn(bad, b)
+
+    def test_backend_write_has_exact_keys(self):
+        i = self.backend.index("Backend.addFeedback = function")
+        body = self.backend[i:self.backend.index("\n      };", i)]
+        for k in ("uid: uid", "text:", "kind: kind || null", "contactOk: !!contactOk", "page:", "ua:", "createdAt: serverTimestamp()"):
+            self.assertIn(k, body)
+        self.assertIn('collection(db, "feedback")', body)
+
+    def test_entry_points_and_copy(self):
+        self.assertIn("💬 Send feedback", self.app)
+        self.assertIn('var FEEDBACK_FOOT_TABS = ["home", "nearby", "meetups"];', self.app)
+        self.assertIn('id="me-feedback"', self.app)
+        self.assertIn('"Thank you 💛 We read every note."', self.app)
+        self.assertIn('toast("Sign in to send feedback")', self.app)
+        self.assertIn('maxlength="\' + FEEDBACK_MAX + \'"', self.app)
+        self.assertIn("var FEEDBACK_MAX = 1000;", self.app)
+        for k in ("Idea", "Bug", "Something felt unsafe", "Other"):
+            self.assertIn('"%s"]' % k, self.app)
+        self.assertNotIn("mailto:", self.app)  # no work email, no unread inbox
+        self.assertIn(".feedback-foot", self.css)
+
+    def test_send_is_debounced_and_keeps_text_on_error(self):
+        i = self.app.index("function sendFeedback(el)")
+        body = self.app[i:self.app.index("\n  }\n", i)]
+        self.assertIn("if (fbDraft.sending) return;", body)
+        self.assertIn("busy(el)", body)
+        self.assertIn('failToast("send your feedback", el)(e)', body)
+        ok_part = body[body.index(".then("):body.index(".catch(")]
+        self.assertIn("fbDraft = freshFeedback()", ok_part)  # cleared only on success
+        self.assertNotIn("freshFeedback", body[body.index(".catch("):])
+
+    def test_text_is_escaped_in_sheet_and_mod_list(self):
+        self.assertIn("esc(fbDraft.text)", self.app)
+        self.assertIn("esc(f.text)", self.app)
+        self.assertIn("B.listenFeedback(function (items)", self.app)
+        self.assertIn("modState.unsubFb", self.app)
+
+    def test_rendered_sheet_and_mod_list(self):
+        node = _node()
+        if not node:
+            self.skipTest("node not installed")
+        harness = r"""
+const fs = require('fs'), path = require('path'), vm = require('vm');
+const webDir = %r;
+const dataJs = fs.readFileSync(path.join(webDir, 'data.js'), 'utf8');
+const appJs = fs.readFileSync(path.join(webDir, 'app.js'), 'utf8');
+function ok(c, msg) { if (!c) throw new Error(msg); }
+const ls = { store: {}, getItem(k) { return this.store[k] || null; }, setItem(k, v) { this.store[k] = v; }, removeItem(k) { delete this.store[k]; } };
+const w = { location: { hash: '#me', search: '', hostname: 'localhost' }, localStorage: ls,
+  document: { addEventListener() {}, querySelector() { return null; }, getElementById() { return null; }, body: { setAttribute() {} } },
+  Backend: { isReal: true, user: { uid: 'u1' } }, console: console, setTimeout: setTimeout, clearTimeout: clearTimeout };
+w.window = w;
+vm.runInContext(dataJs, vm.createContext(w)); vm.runInContext(appJs, w);
+const me = w.AANGAN.V.me().html;
+ok(me.includes('id="me-feedback"') && me.includes('Send feedback'), 'Me row: ' + me);
 console.log('OK');
 """ % WEB_DIR
         r = subprocess.run([node, "-e", harness], capture_output=True, text=True)

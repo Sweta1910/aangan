@@ -77,7 +77,7 @@
   // Moderator state is deliberately NOT in `store`: it must never be persisted to
   // localStorage (a stale/forged flag would only hide buttons anyway -- Firestore
   // rules are the real gate). Reset on every auth change by syncModerator().
-  var modState = { isMod: false, reports: [], unsub: null, postCache: {}, fetching: {} };
+  var modState = { isMod: false, reports: [], unsub: null, postCache: {}, fetching: {}, feedback: [], unsubFb: null };
   function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) { /* ignore */ } }
 
   // -------------------------------------------------------------- helpers
@@ -810,6 +810,8 @@
         (window.Backend.user ? '<div class="link-row uid-row"><span class="grow"><b>Your account ID</b><span class="tiny" id="my-uid">' + esc(window.Backend.user.uid) + '</span></span><button class="btn btn-ghost btn-sm" data-act="copy-uid" id="copy-uid">Copy</button></div>' : "") +
         '<button class="link-row" data-act="sign-out" id="sign-out">' + icon("reset") + '<span class="grow">Sign out</span>' + icon("chevron") + "</button></div></div>" :
         '<button class="link-row" data-act="reset" id="reset-demo">' + icon("reset") + '<span class="grow">Reset demo</span>' + icon("chevron") + "</button></div></div>") +
+      '<div class="settings-group"><h3>Help us improve</h3><div class="card">' +
+      '<button class="link-row" data-act="feedback" id="me-feedback"><span aria-hidden="true">💬</span><span class="grow">Send feedback</span><span class="tiny">Tell us what you think</span>' + icon("chevron") + "</button></div></div>" +
       '<p class="footer-note">' + esc(BRAND.name) + (isRealMode() ? " · v0.1 · beta" : " prototype · v0.1 · all data is fictional") + "</p></div>" };
   };
 
@@ -853,9 +855,18 @@
         '<button class="btn btn-ghost btn-sm" data-act="mod-keep" data-id="' + esc(r.id) + '">Keep (dismiss report)</button>' +
         "</div></article>";
     }).join("");
+    // Feedback (real mode only): read-only, newest first. Rules let only moderators read it.
+    var fb = isRealMode() ? (modState.feedback || []) : [];
+    var fbList = fb.map(function (f) {
+      return '<article class="card mod-item fb-item" id="fb-' + esc(f.id) + '">' +
+        '<div class="mod-meta"><span class="tag teal">' + esc(feedbackKindLabel(f.kind)) + '</span><span class="tiny">' + esc(formatTime(f.createdAt)) + (f.contactOk ? " · OK to contact" : "") + "</span></div>" +
+        '<p class="mod-body">' + esc(f.text) + "</p>" + (f.page ? '<p class="tiny">Sent from ' + esc(f.page) + "</p>" : "") + "</article>";
+    }).join("");
+    var fbSection = isRealMode() ? '<div class="section-head" style="padding:0 18px"><h2>Feedback</h2><span class="muted">' + fb.length + "</span></div>" +
+      (fbList || emptyState("💬", "No feedback yet", "Notes from moms show up here, newest first.")) : "";
     return { tab: "me", html: head +
       '<p class="muted" style="padding:0 18px 6px;font-size:14px">' + (isRealMode() ? "Reported posts, newest first. Removing deletes the post, its replies and its reports for everyone." : "Demo mode: reports you make on this device show up here.") + "</p>" +
-      (list || emptyState("🌿", "No open reports", "All clear. Thank you for keeping " + esc(BRAND.name) + " kind.")) + "</div>" };
+      (list || emptyState("🌿", "No open reports", "All clear. Thank you for keeping " + esc(BRAND.name) + " kind.")) + fbSection + "</div>" };
   };
 
   // --------------------------------------------------------------- router
@@ -874,6 +885,7 @@
     return i < 0 ? { name: h, arg: null } : { name: h.slice(0, i), arg: decodeURIComponent(h.slice(i + 1)) };
   }
   var lastRoute = "";
+  var FEEDBACK_FOOT_TABS = ["home", "nearby", "meetups"];
   function render(keepScroll) {
     var r = parseHash();
     var view = V[r.name] || V.home;
@@ -881,6 +893,8 @@
     var screen = $("#screen");
     var y = screen.scrollTop;
     screen.innerHTML = out.html;
+    // "💬 Send feedback" sits at the end of the main tab screens (Me has its own row).
+    if (FEEDBACK_FOOT_TABS.indexOf(out.tab) >= 0) { var fv = screen.querySelector(".view"); if (fv) fv.insertAdjacentHTML("beforeend", feedbackFoot()); }
     var routeKey = r.name + "/" + (r.arg || "");
     if (keepScroll && routeKey === lastRoute) {
       screen.scrollTop = y;
@@ -964,6 +978,57 @@
     var first = s.querySelector("button"); if (first) first.focus();
   }
   function closeSheet() { $("#sheet").hidden = true; $("#sheet-backdrop").hidden = true; }
+
+  // ------------------------------------------------------------- feedback
+  // "💬 Send feedback" (footer of the main tabs + a row on Me). Signed-in real mode
+  // writes /feedback (write-only for moms; only moderators can read it -- see
+  // firestore.rules). Signed out / demo: there's no safe inbox to mail, so we
+  // just say "Sign in to send feedback". The draft survives closing the sheet and
+  // a failed send, so she never loses what she wrote.
+  var FEEDBACK_MAX = 1000;
+  var FEEDBACK_KINDS = [["idea", "Idea"], ["bug", "Bug"], ["unsafe", "Something felt unsafe"], ["other", "Other"]];
+  function freshFeedback() { return { text: "", kind: null, contactOk: false, sending: false }; }
+  var fbDraft = freshFeedback();
+  function feedbackKindLabel(k) { for (var i = 0; i < FEEDBACK_KINDS.length; i++) if (FEEDBACK_KINDS[i][0] === k) return FEEDBACK_KINDS[i][1]; return "Feedback"; }
+  function feedbackFoot() {
+    return '<div class="feedback-foot"><button class="feedback-link" data-act="feedback" id="feedback-open">💬 Send feedback</button></div>';
+  }
+  function feedbackSheetHtml() {
+    var kinds = FEEDBACK_KINDS.map(function (k) {
+      return '<button class="chip" data-act="fb-kind" data-v="' + k[0] + '" aria-pressed="' + (fbDraft.kind === k[0]) + '">' + icon("check", "check") + esc(k[1]) + "</button>";
+    }).join("");
+    var canSend = !!fbDraft.text.trim() && !fbDraft.sending;
+    return '<div class="fb-sheet" id="fb-sheet"><h3>Send feedback</h3>' +
+      '<p class="tiny">What do you think of ' + esc(BRAND.name) + '? Only the ' + esc(BRAND.name) + ' team reads these notes.</p>' +
+      '<div class="field"><label for="fb-text">Your feedback</label>' +
+      '<textarea class="input" id="fb-text" data-input="fb-text" maxlength="' + FEEDBACK_MAX + '" rows="4" placeholder="What did you like? What was confusing or missing?">' + esc(fbDraft.text) + "</textarea>" +
+      '<p class="hint" id="fb-count">' + fbDraft.text.length + " / " + FEEDBACK_MAX + "</p></div>" +
+      '<div class="field"><span class="label">What kind? <span class="tiny">(optional)</span></span><div class="chips">' + kinds + "</div></div>" +
+      '<div class="toggle-row"><div class="grow"><b>OK to contact me</b><span>We may reach out about this note</span></div>' + switchEl(fbDraft.contactOk, "fb-contact", "OK to contact me", ' id="fb-contact"') + "</div>" +
+      '<div class="fb-actions"><button class="btn btn-ghost" data-act="sheet-close" id="fb-cancel">Cancel</button>' +
+      '<button class="btn btn-primary" data-act="fb-send" id="fb-send"' + (canSend ? "" : " disabled") + ">" + (fbDraft.sending ? "Sending…" : "Send") + "</button></div></div>";
+  }
+  function openFeedback() {
+    var B = window.Backend;
+    if (!isRealMode() || !B.user || !B.addFeedback) { toast("Sign in to send feedback"); return; }
+    openSheet(feedbackSheetHtml());
+    var t = $("#fb-text"); if (t) t.focus();
+  }
+  function sendFeedback(el) {
+    var B = window.Backend;
+    if (fbDraft.sending) return; // debounce double submits
+    if (!isRealMode() || !B.user) { toast("Sign in to send feedback"); return; }
+    var txt = fbDraft.text.trim().slice(0, FEEDBACK_MAX);
+    if (!txt) { toast("Write a few words first 💛"); return; }
+    fbDraft.sending = true; busy(el); el.textContent = "Sending…";
+    var ua = (window.navigator && navigator.userAgent ? String(navigator.userAgent) : "").slice(0, 150);
+    B.addFeedback(B.user.uid, txt, fbDraft.kind, fbDraft.contactOk, location.hash || "#home", ua).then(function () {
+      fbDraft = freshFeedback(); closeSheet(); toast("Thank you 💛 We read every note.");
+    }).catch(function (e) {
+      fbDraft.sending = false; el.textContent = "Send"; // text kept for a retry
+      failToast("send your feedback", el)(e);
+    });
+  }
   function reportSheet(opts) {
     var sheetEl = document.getElementById("sheet");
     if (sheetEl) { if (opts.postId) sheetEl.setAttribute("data-pid", opts.postId); else sheetEl.removeAttribute("data-pid"); }
@@ -1283,6 +1348,15 @@
         go("#safety");
         break;
       case "sheet-close": closeSheet(); break;
+      case "feedback": closeSheet(); openFeedback(); break;
+      case "fb-kind": {
+        var fk = el.getAttribute("data-v");
+        fbDraft.kind = fbDraft.kind === fk ? null : fk;
+        Array.prototype.forEach.call(document.querySelectorAll('#fb-sheet [data-act="fb-kind"]'), function (c) { c.setAttribute("aria-pressed", String(c.getAttribute("data-v") === fbDraft.kind)); });
+        break;
+      }
+      case "fb-contact": fbDraft.contactOk = !fbDraft.contactOk; el.setAttribute("aria-checked", String(fbDraft.contactOk)); break;
+      case "fb-send": sendFeedback(el); break;
       case "report-start": {
         var lbl = el.getAttribute("data-label");
         var reasons = ["Unkind or shaming", "Harassment or bullying", "Unsafe advice", "Spam or selling", "Not a mom / fake profile", "Something else"];
@@ -1413,6 +1487,10 @@
       var canPost = askDraft.title.trim().length > 4;
       var bt = $("#ask-post"); if (bt) bt.disabled = !canPost;
       var hint = $("#ask-hint"); if (hint) hint.style.display = canPost ? "none" : "";
+    } else if (k === "fb-text") {
+      fbDraft.text = v.slice(0, FEEDBACK_MAX);
+      var fc = $("#fb-count"); if (fc) fc.textContent = fbDraft.text.length + " / " + FEEDBACK_MAX;
+      var fs = $("#fb-send"); if (fs && !fbDraft.sending) fs.disabled = !fbDraft.text.trim();
     } else if (k === "reply-text") {
       replyDraft.text = v;
       e.target.style.height = "auto"; e.target.style.height = Math.min(120, e.target.scrollHeight) + "px";
@@ -1561,7 +1639,8 @@
   function syncModerator(u) {
     var B = window.Backend;
     if (modState.unsub) { modState.unsub(); modState.unsub = null; }
-    modState.isMod = false; modState.reports = []; modState.postCache = {}; modState.fetching = {};
+    if (modState.unsubFb) { modState.unsubFb(); modState.unsubFb = null; }
+    modState.isMod = false; modState.reports = []; modState.postCache = {}; modState.fetching = {}; modState.feedback = [];
     if (!u || !B || !B.checkModerator) return;
     B.checkModerator(u.uid).then(function (isMod) {
       if (!isMod || !B.user || B.user.uid !== u.uid) return;
@@ -1570,6 +1649,10 @@
         modState.reports = reps;
         var n = parseHash().name; if (n === "mod" || n === "me") rerender();
       }, failToast("load reports", null));
+      if (B.listenFeedback) modState.unsubFb = B.listenFeedback(function (items) {
+        modState.feedback = items;
+        if (parseHash().name === "mod") rerender();
+      }, function (e) { console.warn("MomSakhi: couldn't load feedback (rules not published yet?)", e); });
       var n2 = parseHash().name; if (n2 === "mod" || n2 === "me") rerender();
     }).catch(function (e) { console.warn("MomSakhi: moderator check failed (treated as not a moderator)", e); });
   }

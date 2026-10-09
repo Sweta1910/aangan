@@ -134,5 +134,26 @@ service cloud.firestore {
                     request.resource.data.reporterUid == request.auth.uid;
       allow read, delete: if isModerator();
     }
+
+    // Feedback ("Send feedback" button): any signed-in mom can send a note as herself
+    // (uid can't be spoofed), with exactly these keys, 1-1000 chars of text and a
+    // known kind (or none). Nobody but a moderator can read it; no one can edit or
+    // delete it from the app (moderators clean up in the Firebase console).
+    match /feedback/{feedbackId} {
+      allow create: if request.auth != null &&
+                    request.resource.data.uid == request.auth.uid &&
+                    request.resource.data.keys().hasOnly(['uid', 'text', 'kind', 'contactOk', 'page', 'ua', 'createdAt']) &&
+                    request.resource.data.text is string &&
+                    request.resource.data.text.size() >= 1 &&
+                    request.resource.data.text.size() <= 1000 &&
+                    request.resource.data.get('kind', null) in ['idea', 'bug', 'unsafe', 'other', null] &&
+                    request.resource.data.get('contactOk', false) is bool &&
+                    request.resource.data.get('page', '') is string &&
+                    request.resource.data.get('page', '').size() <= 200 &&
+                    request.resource.data.get('ua', '') is string &&
+                    request.resource.data.get('ua', '').size() <= 300 &&
+                    request.resource.data.createdAt == request.time;
+      allow read: if isModerator();
+    }
   }
 }

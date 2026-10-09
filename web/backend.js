@@ -39,7 +39,9 @@
     getPost: null,
     removePost: null,
     setReaction: null,
-    listenMyReactions: null
+    listenMyReactions: null,
+    addFeedback: null,
+    listenFeedback: null
   };
 
   // Popup failures that mean "this browser can't do popups", not "the mom said no".
@@ -302,6 +304,35 @@
           cb(mine);
         }, function(e) {
           console.error("listenMyReactions failed", e);
+          if (onError) onError(e);
+        });
+      };
+      // ---- Feedback ("💬 Send feedback"). Write-only for moms: rules allow create
+      // with exactly these keys and let ONLY moderators read (Firebase console or
+      // Me -> Moderation). kind is null when she didn't pick one.
+      Backend.addFeedback = function(uid, text, kind, contactOk, page, ua) {
+        return addDoc(collection(db, "feedback"), {
+          uid: uid,
+          text: str(text, ""),
+          kind: kind || null,
+          contactOk: !!contactOk,
+          page: str(page, "").slice(0, 200),
+          ua: str(ua, "").slice(0, 300),
+          createdAt: serverTimestamp()
+        });
+      };
+      Backend.listenFeedback = function(cb, onError) {
+        var q = query(collection(db, "feedback"), orderBy("createdAt", "desc"), limit(100));
+        return onSnapshot(q, function(snap) {
+          var items = [];
+          snap.forEach(function(d) {
+            var data = d.data({ serverTimestamps: "estimate" });
+            data.id = d.id;
+            items.push(data);
+          });
+          cb(items);
+        }, function(e) {
+          console.error("listenFeedback failed", e);
           if (onError) onError(e);
         });
       };

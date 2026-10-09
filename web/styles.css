@@ -796,3 +796,13 @@ textarea.input { min-height: 140px; resize: none; line-height: 1.55; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Feedback ("💬 Send feedback"): quiet footer link on main tabs + sheet. */
+.feedback-foot { display: flex; justify-content: center; padding: 18px 18px 28px; }
+.feedback-link { background: none; border: 1px dashed var(--line); border-radius: 999px; padding: 8px 16px; color: var(--ink); opacity: .75; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.feedback-link:hover, .feedback-link:focus-visible { opacity: 1; color: var(--teal); border-color: var(--teal); }
+.fb-sheet textarea { min-height: 96px; resize: vertical; }
+.fb-sheet .toggle-row { margin-top: 6px; }
+.fb-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+.fb-actions .btn { min-width: 110px; }
+.fb-item .mod-body { white-space: pre-wrap; }
