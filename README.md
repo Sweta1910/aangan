@@ -1,8 +1,8 @@
 # MomSakhi — clickable prototype
 
 > **A sakhi for every stage of motherhood.** *Sakhi* (सखी) means a close friend.
-> No judgement, just moms: a women-only, judgement-free community app for Indian moms,
-> launching city by city — starting with **Mountain View / Sunnyvale, CA**.
+> No judgement, just moms: a women-only, judgement-free community app for Indian moms
+> anywhere in the world — in India and abroad (USA, UK, Canada, UAE, Singapore, Australia…).
 
 Personal project prototype (not UCP work). Pure static HTML/CSS/JS with mock data: no backend,
 no build step, no API keys. Every person, post and event is fictional; avatars are initials only.
@@ -23,7 +23,7 @@ screen; on a phone it fills the screen. Opening `web/index.html` directly also w
 | # | Screen | Route | What to try |
 |---|--------|-------|-------------|
 | 1 | Welcome | `#welcome` | Brand, promise, "Continue with Google" / "Continue with phone" |
-| 2 | City picker | `#onboard/city` | MV/Sunnyvale live; tap Cupertino / San Jose / Fremont / Santa Clara to join a waitlist |
+| 2 | City (optional) | `#onboard/city` | Type any city worldwide or pick a suggestion (Pune, San Jose, London, Dubai…); "Skip for now" — only Meetups & Nearby need it |
 | 3 | About you | `#onboard/about` | Nickname, anonymous-by-default toggle, kids' stages, 10 languages |
 | 4 | Verification (mock) | `#onboard/verify` | Phone code or Google account check → "Enter MomSakhi" |
 | 5 | Home feed | `#home` | 9 circles, posts (anonymous or nickname), Hug / Been there / Helpful reactions — no downvotes |

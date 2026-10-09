@@ -43,7 +43,8 @@
       joined: {}          // circleId -> true
     };
   }
-  // City is whatever the mom types (any Indian city, town or area), so it is only
+  // City is whatever the mom types (any city, town or area worldwide -- India or
+  // abroad, ideally "City, Country"), so it is only
   // normalised, never matched against a list: control chars dropped, whitespace
   // collapsed, trimmed, capped at CITY_MAX. It is ALWAYS esc()'d when rendered.
   var CITY_MAX = 40;
@@ -89,15 +90,19 @@
 
   // ---------------------------------------------------------------- city
   // One city input used by onboarding, the meetups gate and the Me sheet. The
-  // <datalist> only SUGGESTS common Indian cities (data.js citySuggestions); any
-  // text is accepted. Only one city input is on screen at a time, so the
-  // datalist id never collides.
+  // <datalist> only SUGGESTS common cities worldwide -- Indian metros plus
+  // diaspora hubs written "City, Country" (data.js citySuggestions); any text is
+  // accepted. Our moms are Indian moms anywhere in the world, and city names
+  // repeat across countries (Hyderabad, Birmingham), so every city input carries
+  // CITY_HINT nudging "City, Country" -- meetups match on this exact string.
+  // Only one city input is on screen at a time, so the datalist id never collides.
+  var CITY_HINT = "Outside India? Add the country too, e.g. “Birmingham, UK”, so you find the right meetups.";
   function hasCity() { return !!store.city; }
   function cityField(id, label, hint) {
     return '<div class="field city-field"><label for="' + id + '">' + label + "</label>" +
-      '<input class="input" id="' + id + '" list="city-suggestions" maxlength="' + CITY_MAX + '" value="' + esc(store.city) + '" placeholder="e.g. Pune, Bengaluru, Delhi" autocomplete="address-level2" enterkeyhint="done" data-city-input="1">' +
+      '<input class="input" id="' + id + '" list="city-suggestions" maxlength="' + CITY_MAX + '" value="' + esc(store.city) + '" placeholder="e.g. Pune, San Jose, London" autocomplete="address-level2" enterkeyhint="done" data-city-input="1">' +
       '<datalist id="city-suggestions">' + (D.citySuggestions || []).map(function (c) { return '<option value="' + esc(c) + '">'; }).join("") + "</datalist>" +
-      (hint ? '<p class="hint">' + hint + "</p>" : "") + "</div>";
+      '<p class="hint">' + (hint ? hint + " " : "") + CITY_HINT + "</p></div>";
   }
   // Firestore keeps city on the mom's /profiles/{uid} doc (rules already let the
   // owner write her own doc). Locally it lives in store.city, NOT store.profile,

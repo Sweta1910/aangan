@@ -112,15 +112,26 @@ class TestData(unittest.TestCase):
         self.assertNotIn('"MomSakhi"', _read("app.js"))
         self.assertNotIn('"Aangan"', _read("app.js"))
 
-    def test_city_suggestions_are_indian_and_free_text(self):
+    def test_city_suggestions_are_global_and_free_text(self):
         # City is optional free text; data.js only offers datalist suggestions.
+        # 2026-10-09: audience is Indian moms ANYWHERE (India + diaspora), so the
+        # list mixes Indian metros with diaspora hubs written "City, Country".
         self.assertNotIn("cities", self.d)
         sugg = self.d["citySuggestions"]
         self.assertTrue({"Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Chennai", "Kolkata", "Pune",
                          "Ahmedabad", "Jaipur", "Lucknow", "Chandigarh", "Kochi", "Indore",
                          "Bhubaneswar", "Noida", "Gurugram"} <= set(sugg))
+        self.assertTrue({"Bay Area, USA", "San Jose, USA", "Seattle, USA", "Dallas, USA", "Houston, USA",
+                         "Chicago, USA", "Edison, NJ, USA", "New York, USA", "Atlanta, USA",
+                         "Toronto, Canada", "Vancouver, Canada", "London, UK", "Leicester, UK",
+                         "Birmingham, UK", "Dubai, UAE", "Abu Dhabi, UAE", "Singapore",
+                         "Sydney, Australia", "Melbourne, Australia", "Auckland, New Zealand"} <= set(sugg))
+        self.assertTrue(45 <= len(sugg) <= 60, len(sugg))
         self.assertEqual(len(sugg), len(set(sugg)))
         self.assertTrue(all(0 < len(c) <= 40 for c in sugg))
+        # Every non-India entry names its country (Singapore is a city-state).
+        abroad = sugg[sugg.index("Bay Area, USA"):]
+        self.assertTrue(all(", " in c or c == "Singapore" for c in abroad), abroad)
         self.assertFalse({"Mountain View", "Sunnyvale", "Cupertino"} & set(sugg))
 
     def test_required_languages_and_stages(self):
@@ -659,7 +670,9 @@ def _node():
 
 
 class TestOptionalCity(unittest.TestCase):
-    """2026-10-09: city became OPTIONAL free text (target users: moms in India).
+    """2026-10-09: city became OPTIONAL free text. Target users are Indian moms
+    ANYWHERE in the world (India + diaspora: USA, UK, Canada, UAE, Singapore,
+    Australia...), so any city worldwide is accepted.
     Only the meetup features -- the Meetups tab and Nearby moms -- need it and
     show an "Add your city" card until it is set. Feed/posting/circles never do.
     Real mode never shows the fictional demo meetups / moms / sample map."""
@@ -676,11 +689,27 @@ class TestOptionalCity(unittest.TestCase):
         self.assertIn("Skip for now", self.app)
         self.assertIn('list="city-suggestions"', self.app)
         self.assertIn("var CITY_MAX = 40;", self.app)
-        self.assertIn('placeholder="e.g. Pune, Bengaluru, Delhi"', self.app)
+        self.assertIn('placeholder="e.g. Pune, San Jose, London"', self.app)
         self.assertNotIn("D.cities", self.app)
         self.assertNotIn('data-act="waitlist"', self.app)
         # Continue is never disabled on the city step.
         self.assertNotRegex(self.app, r'id="city-continue"[^>]*disabled')
+
+    def test_city_hint_suggests_city_country_on_every_input(self):
+        # Same-named cities (Hyderabad, Birmingham) must not merge meetups, so the
+        # hint is part of cityField() itself -- not just the onboarding step.
+        self.assertIn("var CITY_HINT = ", self.app)
+        self.assertIn("Birmingham, UK", self.app)
+        self.assertIn('\'<p class="hint">\' + (hint ? hint + " " : "") + CITY_HINT', self.app)
+
+    def test_city_copy_is_worldwide_not_india_only(self):
+        for phrase in ("Indian city", "Indian cities", "city in India", "cities in India"):
+            self.assertNotIn(phrase, self.app, phrase)
+            self.assertNotIn(phrase, _read("data.js"), phrase)
+        # Diaspora circles stay -- they are core for moms abroad.
+        data = load_data()
+        names = {c["name"] for c in data["circles"]}
+        self.assertTrue({"New to the US", "Parents visiting from India"} <= names, names)
 
     def test_no_us_city_in_user_visible_app_copy(self):
         for place in ("Mountain View", "Sunnyvale", "MOUNTAIN VIEW", "SUNNYVALE", "SF BAY", "El Camino", "Cuesta Park"):
@@ -723,6 +752,7 @@ for (const real of [false, true]) {
   ok(A.city() === '', tag + 'fresh store must have no city');
   const ob = A.V['onboard/city']().html;
   ok(ob.includes('id="city-skip"') && ob.includes('optional') && ob.includes('<datalist id="city-suggestions">') && ob.includes('value="Pune"'), tag + 'onboarding city step: ' + ob);
+  ok(ob.includes('value="San Jose, USA"') && ob.includes('value="London, UK"') && ob.includes('value="Dubai, UAE"') && ob.includes('placeholder="e.g. Pune, San Jose, London"') && ob.includes('Birmingham, UK'), tag + 'onboarding city step not global: ' + ob);
   const welcome = A.V.welcome().html;
   ok(!/Mountain View|Sunnyvale/.test(welcome), tag + 'welcome names a US city');
   ok(welcome.includes('Meetups in your city'), tag + 'welcome promise row');

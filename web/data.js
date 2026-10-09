@@ -11,8 +11,13 @@ window.AANGAN_DATA = {
   "citySuggestions": [
     "Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Chennai", "Kolkata", "Pune", "Ahmedabad",
     "Jaipur", "Lucknow", "Chandigarh", "Kochi", "Indore", "Bhubaneswar", "Noida", "Gurugram",
-    "Navi Mumbai", "Thane", "Surat", "Nagpur", "Coimbatore", "Visakhapatnam", "Bhopal", "Mysuru",
-    "Vadodara", "Goa", "Dehradun", "Thiruvananthapuram", "Guwahati", "Patna", "Ranchi", "Mangaluru"
+    "Navi Mumbai", "Thane", "Surat", "Nagpur", "Coimbatore", "Visakhapatnam", "Goa", "Thiruvananthapuram",
+    "Bay Area, USA", "San Jose, USA", "Seattle, USA", "Dallas, USA", "Houston, USA", "Chicago, USA",
+    "Edison, NJ, USA", "New York, USA", "Atlanta, USA", "Boston, USA",
+    "Toronto, Canada", "Brampton, Canada", "Vancouver, Canada", "Calgary, Canada",
+    "London, UK", "Leicester, UK", "Birmingham, UK", "Manchester, UK",
+    "Dubai, UAE", "Abu Dhabi, UAE", "Sharjah, UAE", "Doha, Qatar", "Singapore",
+    "Sydney, Australia", "Melbourne, Australia", "Auckland, New Zealand"
   ],
   "stages": ["Expecting", "0–1 yr", "Toddler", "School-age"],
   "languages": ["English", "Hindi", "Tamil", "Telugu", "Kannada", "Marathi", "Bengali", "Gujarati", "Punjabi", "Malayalam"],
