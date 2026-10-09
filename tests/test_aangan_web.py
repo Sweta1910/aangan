@@ -294,7 +294,8 @@ class TestRealModeHardening(unittest.TestCase):
         return [m.start() for m in re.finditer(r"Backend\.%s\(" % name, self.app)]
 
     def test_every_backend_write_and_profile_read_is_caught(self):
-        for name in ("addPost", "addReply", "addReport", "saveProfile", "getProfile", "signOut", "getRedirectResult"):
+        for name in ("addPost", "addReply", "addReport", "saveProfile", "getProfile", "signOut", "getRedirectResult",
+                     "removePost", "deleteReport", "getPost"):
             calls = self._calls(name)
             self.assertTrue(calls, "app.js never calls Backend.%s" % name)
             for start in calls:
@@ -352,8 +353,9 @@ class TestRealModeHardening(unittest.TestCase):
         self.assertIn("p.circle ? circle(p.circle) : null", self.app)
 
     def test_listeners_have_error_callbacks_and_wait_for_sign_in(self):
-        self.assertEqual(self.backend.count("onSnapshot(q, function(snap)"), 2)
-        self.assertEqual(self.backend.count("if (onError) onError(e);"), 2)
+        # posts, replies, reports: every listener has an error callback.
+        self.assertEqual(self.backend.count("onSnapshot(q, function(snap)"), 3)
+        self.assertEqual(self.backend.count("if (onError) onError(e);"), 3)
         self.assertIn("if (!B.user) { B.posts = []; return; }", self.app)
 
     def test_circle_optional_when_posting(self):
@@ -378,6 +380,84 @@ class TestRealModeHardening(unittest.TestCase):
             self.skipTest("node not installed")
         r = subprocess.run([node, "--check", os.path.join(WEB_DIR, "backend.js")], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
+
+
+class TestModeration(unittest.TestCase):
+    """Moderation queue: moderators/{uid} made by hand in the console; rules gate it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = _read("app.js")
+        cls.backend = _read("backend.js")
+        cls.css = _read("styles.css")
+        with open(os.path.join(APP_DIR, "firestore.rules"), encoding="utf-8") as f:
+            cls.rules = f.read()
+
+    def _block(self, header):
+        i = self.rules.index(header)
+        return self.rules[i:self.rules.index("\n    }", i)]
+
+    def test_rules_is_moderator_helper(self):
+        self.assertIn("function isModerator()", self.rules)
+        self.assertIn("exists(/databases/$(database)/documents/moderators/$(request.auth.uid))", self.rules)
+
+    def test_rules_no_client_can_write_moderators(self):
+        block = self._block("match /moderators/{uid}")
+        self.assertIn("allow write: if false;", block)
+        self.assertIn("request.auth.uid == uid", block)  # may read only her own doc
+        self.assertNotIn("create", block)
+        self.assertNotIn("update", block)
+
+    def test_rules_moderator_powers(self):
+        reports = self._block("match /reports/{reportId}")
+        self.assertIn("allow read, delete: if isModerator();", reports)
+        self.assertIn("request.resource.data.reporterUid == request.auth.uid", reports)
+        self.assertEqual(self.rules.count("(isModerator() || resource.data.uid == request.auth.uid)"), 2)
+
+    def test_rules_keep_existing_and_deny_by_default(self):
+        self.assertIn("match /{document=**} {\n      allow read, write: if false;", self.rules)
+        self.assertIn("affectedKeys().hasOnly(['replyCount'])", self.rules)
+        self.assertIn("request.resource.data.get('replyCount', 0) == 0", self.rules)
+        self.assertIn("request.resource.data.get('author', null) == null", self.rules)
+        self.assertNotIn("allow read: if false;", self._block("match /reports/{reportId}"))
+
+    def test_backend_remove_post_cascades_in_one_batch(self):
+        self.assertIn("Backend.removePost = function(postId)", self.backend)
+        self.assertIn("writeBatch(db)", self.backend)
+        self.assertIn('collection(db, "posts/" + postId + "/replies")', self.backend)
+        self.assertIn('where("postId", "==", postId)', self.backend)
+        self.assertIn("return batch.commit();", self.backend)
+        self.assertIn('doc(db, "moderators", uid)', self.backend)
+        self.assertIn('deleteDoc(doc(db, "reports", reportId))', self.backend)
+
+    def test_app_moderation_screen(self):
+        for s in ("V.mod = function", "Remove post", "Keep (dismiss report)", 'href="#mod"',
+                  "window.confirm(", 'failToast("remove the post", el)', 'failToast("dismiss the report", el)',
+                  'failToast("load reports", null)'):
+            self.assertIn(s, self.app)
+        self.assertIn("function canModerate() { return isRealMode() ? modState.isMod : true; }", self.app)
+
+    def test_mod_flag_never_persisted(self):
+        self.assertIn("var modState = {", self.app)
+        self.assertNotIn("store.isMod", self.app)
+        self.assertIn("syncModerator(u);", self.app)
+        # checkModerator runs via the `B` alias; its chain must still end in .catch.
+        i = self.app.index("B.checkModerator(u.uid)")
+        self.assertIn(".catch(", self.app[i:i + 1200])
+        self.assertIn("if (modState.unsub) { modState.unsub(); modState.unsub = null; }", self.app)
+
+    def test_demo_mode_reports_in_local_store(self):
+        self.assertIn("reports: [],        // demo-mode reports", self.app)
+        self.assertIn("store.reports.unshift(", self.app)
+
+    def test_account_id_with_copy(self):
+        self.assertIn("Your account ID", self.app)
+        self.assertIn('data-act="copy-uid"', self.app)
+        self.assertIn("navigator.clipboard.writeText(myUid)", self.app)
+
+    def test_moderation_css(self):
+        for sel in (".btn-danger", ".mod-item", ".mod-actions", ".uid-row"):
+            self.assertIn(sel, self.css)
 
 
 if __name__ == "__main__":

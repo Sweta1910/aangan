@@ -37,6 +37,7 @@
       req: {},            // momId -> "pending" | "accepted"
       chats: {},          // momId -> [messages]
       hidden: [],         // post ids hidden by this user
+      reports: [],        // demo-mode reports (real mode reads Firestore /reports)
       blocked: [],        // author nicknames / mom ids blocked
       joined: {}          // circleId -> true
     };
@@ -49,6 +50,10 @@
     return freshStore();
   }
   var store = load();
+  // Moderator state is deliberately NOT in `store`: it must never be persisted to
+  // localStorage (a stale/forged flag would only hide buttons anyway -- Firestore
+  // rules are the real gate). Reset on every auth change by syncModerator().
+  var modState = { isMod: false, reports: [], unsub: null, postCache: {}, fetching: {} };
   function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) { /* ignore */ } }
 
   // -------------------------------------------------------------- helpers
@@ -71,6 +76,7 @@
   function formatTime(t) {
     if (!t) return "just now";
     if (typeof t === "string") return t;
+    if (typeof t === "number") { var ms = t; t = { toDate: function () { return new Date(ms); } }; }
     if (typeof t.toDate === "function") {
       var d = t.toDate();
       if (!d || isNaN(d.getTime())) return "just now";
@@ -665,13 +671,60 @@
       '<div class="settings-group"><h3>Safety</h3><div class="card">' +
       '<button class="link-row" data-act="blocked-list">' + icon("block") + '<span class="grow">Blocked moms</span><span class="tiny">' + store.blocked.length + "</span>" + icon("chevron") + "</button>" +
       '<button class="link-row" data-act="guidelines">' + icon("book") + '<span class="grow">Community guidelines</span>' + icon("chevron") + "</button>" +
+      (canModerate() ? '<a class="link-row" href="#mod" id="open-mod" style="text-decoration:none;color:inherit">' + icon("flag") + '<span class="grow">Moderation' + (isRealMode() ? "" : " (demo)") + '</span><span class="tiny">' + modReports().length + " open</span>" + icon("chevron") + "</a>" : "") +
       '<a class="link-row" href="#safety" style="text-decoration:none;color:inherit">' + icon("shield") + '<span class="grow">Safety centre & crisis lines</span>' + icon("chevron") + "</a></div></div>" +
       '<div class="settings-group"><h3>Account</h3><div class="card">' +
       '<button class="link-row" data-act="go" data-to="#onboard/city">' + icon("pin") + '<span class="grow">City</span><span class="tiny">' + esc(c.name) + "</span>" + icon("chevron") + "</button>" +
       ((window.Backend && window.Backend.isReal) ? 
+        (window.Backend.user ? '<div class="link-row uid-row"><span class="grow"><b>Your account ID</b><span class="tiny" id="my-uid">' + esc(window.Backend.user.uid) + '</span></span><button class="btn btn-ghost btn-sm" data-act="copy-uid" id="copy-uid">Copy</button></div>' : "") +
         '<button class="link-row" data-act="sign-out" id="sign-out">' + icon("reset") + '<span class="grow">Sign out</span>' + icon("chevron") + "</button></div></div>" :
         '<button class="link-row" data-act="reset" id="reset-demo">' + icon("reset") + '<span class="grow">Reset demo</span>' + icon("chevron") + "</button></div></div>") +
       '<p class="footer-note">' + esc(BRAND.name) + " prototype · v0.1 · all data is fictional</p></div>" };
+  };
+
+  // ----------------------------------------------------------- moderation
+  // Real mode: shown only to moderators (a /moderators/{uid} doc made by hand in the
+  // Firebase console). Hiding the screen is cosmetic -- firestore.rules isModerator()
+  // is what actually allows reading/deleting reports and deleting others' posts.
+  // Demo mode: everyone is a pretend moderator over reports kept in localStorage.
+  function isRealMode() { return !!(window.Backend && window.Backend.isReal); }
+  function canModerate() { return isRealMode() ? modState.isMod : true; }
+  function modReports() { return isRealMode() ? modState.reports : (store.reports || []); }
+  // undefined = still loading, null = gone. Reported posts outside the feed's latest
+  // 100 are fetched once and cached for the session.
+  function modPost(pid) {
+    var p = post(pid);
+    if (p) return p;
+    if (!isRealMode()) return null;
+    if (Object.prototype.hasOwnProperty.call(modState.postCache, pid)) return modState.postCache[pid];
+    if (!modState.fetching[pid] && window.Backend.getPost) {
+      modState.fetching[pid] = true;
+      window.Backend.getPost(pid).then(function (d) {
+        modState.postCache[pid] = d;
+        if (parseHash().name === "mod") rerender();
+      }).catch(function (e) { console.error("Aangan: couldn't load reported post", e); modState.postCache[pid] = null; });
+    }
+    return undefined;
+  }
+  V.mod = function () {
+    var head = '<div class="view"><header class="topbar"><h1>Moderation</h1><button class="icon-btn" data-act="back" aria-label="Back">' + icon("back") + "</button></header>";
+    if (!canModerate()) return { tab: "me", html: head + emptyState("🔒", "Moderators only", "This page is for Aangan moderators.") + "</div>" };
+    var list = modReports().map(function (r) {
+      var p = modPost(r.postId);
+      var title = p ? (p.title || "(no title)") : (p === null ? "Post already removed or not found" : "Loading post…");
+      var body = p && p.body ? String(p.body) : "";
+      if (body.length > 160) body = body.slice(0, 160) + "…";
+      return '<article class="card mod-item" id="mod-' + esc(r.id) + '">' +
+        '<div class="mod-meta"><span class="tag marigold">' + esc(r.reason || "Reported") + '</span><span class="tiny">' + esc(formatTime(r.createdAt)) + "</span></div>" +
+        '<h3 class="mod-title">' + esc(title) + "</h3>" + (body ? '<p class="muted mod-body">' + esc(body) + "</p>" : "") +
+        '<div class="mod-actions">' +
+        '<button class="btn btn-danger btn-sm" data-act="mod-remove" data-id="' + esc(r.id) + '" data-pid="' + esc(r.postId) + '">Remove post</button>' +
+        '<button class="btn btn-ghost btn-sm" data-act="mod-keep" data-id="' + esc(r.id) + '">Keep (dismiss report)</button>' +
+        "</div></article>";
+    }).join("");
+    return { tab: "me", html: head +
+      '<p class="muted" style="padding:0 18px 6px;font-size:14px">' + (isRealMode() ? "Reported posts, newest first. Removing deletes the post, its replies and its reports for everyone." : "Demo mode: reports you make on this device show up here.") + "</p>" +
+      (list || emptyState("🌿", "No open reports", "All clear. Thank you for keeping Aangan kind.")) + "</div>" };
   };
 
   // --------------------------------------------------------------- router
@@ -1088,7 +1141,45 @@
            }).catch(failToast("send your report", el));
            break;
         }
-        closeSheet(); toast("Thanks — a moderator will review within 24h"); break;
+        // Demo mode: keep the report on this device so Moderation (demo) can show it.
+        store.reports = store.reports || [];
+        store.reports.unshift({ id: "r" + Date.now(), postId: document.getElementById("sheet").getAttribute("data-pid") || "unknown",
+          reason: (el.textContent || "reported").trim(), createdAt: Date.now() });
+        save(); closeSheet(); toast("Thanks — a moderator will review within 24h"); break;
+      case "mod-remove": {
+        var rpid = el.getAttribute("data-pid");
+        if (!window.confirm("Remove this post for everyone? Its replies and reports will be deleted too.")) break;
+        if (isRealMode()) {
+          busy(el);
+          window.Backend.removePost(rpid).then(function () { toast("Post removed"); })
+            .catch(failToast("remove the post", el));
+          break;
+        }
+        store.posts = store.posts.filter(function (p) { return p.id !== rpid; });
+        if (store.hidden.indexOf(rpid) < 0) store.hidden.push(rpid); // built-in demo posts can only be hidden
+        store.reports = (store.reports || []).filter(function (r) { return r.postId !== rpid; });
+        save(); rerender(); toast("Post removed"); break;
+      }
+      case "mod-keep": {
+        if (!window.confirm("Keep this post and dismiss the report?")) break;
+        if (isRealMode()) {
+          busy(el);
+          window.Backend.deleteReport(id).then(function () { toast("Report dismissed — post kept"); })
+            .catch(failToast("dismiss the report", el));
+          break;
+        }
+        store.reports = (store.reports || []).filter(function (r) { return r.id !== id; });
+        save(); rerender(); toast("Report dismissed — post kept"); break;
+      }
+      case "copy-uid": {
+        var myUid = (window.Backend && window.Backend.user) ? window.Backend.user.uid : "";
+        if (!myUid) break;
+        var askCopy = function () { window.prompt("Copy your account ID:", myUid); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(myUid).then(function () { toast("Account ID copied"); }).catch(askCopy);
+        } else askCopy();
+        break;
+      }
       case "sign-out":
         if (window.Backend && window.Backend.isReal) {
            window.Backend.signOut().then(function() {
@@ -1212,6 +1303,24 @@
       if (parseHash().name === "q" && parseHash().arg === r.arg) rerender();
     }, failToast("load replies", null));
   }
+  // Re-evaluated on every auth change: drop the old listener/flag first so a
+  // signed-out or different user never sees the previous moderator's queue.
+  // A failed check (e.g. rules not yet published) just means "not a moderator".
+  function syncModerator(u) {
+    var B = window.Backend;
+    if (modState.unsub) { modState.unsub(); modState.unsub = null; }
+    modState.isMod = false; modState.reports = []; modState.postCache = {}; modState.fetching = {};
+    if (!u || !B || !B.checkModerator) return;
+    B.checkModerator(u.uid).then(function (isMod) {
+      if (!isMod || !B.user || B.user.uid !== u.uid) return;
+      modState.isMod = true;
+      modState.unsub = B.listenReports(function (reps) {
+        modState.reports = reps;
+        var n = parseHash().name; if (n === "mod" || n === "me") rerender();
+      }, failToast("load reports", null));
+      var n2 = parseHash().name; if (n2 === "mod" || n2 === "me") rerender();
+    }).catch(function (e) { console.warn("Aangan: moderator check failed (treated as not a moderator)", e); });
+  }
   function syncPosts() {
     var B = window.Backend;
     if (B._unsubPosts) { B._unsubPosts(); B._unsubPosts = null; }
@@ -1251,6 +1360,7 @@
             window.Backend.user = u;
             syncPosts();
             syncReplies();
+            syncModerator(u);
             if (u) {
                window.Backend.getProfile(u.uid).then(function(p) {
                  if (p) { store.profile = Object.assign(store.profile || {}, p); store.onboarded = true; }
@@ -1275,5 +1385,6 @@
   });
 
   // Exposed for tests/screenshot tooling only.
-  window.AANGAN = { kindnessScan: kindnessScan, softenText: softenText, reset: function () { localStorage.removeItem(STORE_KEY); } };
+  window.AANGAN = { kindnessScan: kindnessScan, softenText: softenText, reset: function () { localStorage.removeItem(STORE_KEY); },
+    syncModerator: syncModerator };
 })();

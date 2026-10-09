@@ -32,7 +32,12 @@
     addReply: null,
     addReport: null,
     listenPosts: null,
-    listenReplies: null
+    listenReplies: null,
+    checkModerator: null,
+    listenReports: null,
+    deleteReport: null,
+    getPost: null,
+    removePost: null
   };
 
   // Popup failures that mean "this browser can't do popups", not "the mom said no".
@@ -68,7 +73,8 @@
       var onAuthStateChanged = modules[1].onAuthStateChanged;
       var doc = modules[2].doc, getDoc = modules[2].getDoc, setDoc = modules[2].setDoc,
           updateDoc = modules[2].updateDoc, increment = modules[2].increment,
-          collection = modules[2].collection, addDoc = modules[2].addDoc,
+          collection = modules[2].collection, addDoc = modules[2].addDoc, deleteDoc = modules[2].deleteDoc,
+          getDocs = modules[2].getDocs, writeBatch = modules[2].writeBatch, where = modules[2].where,
           serverTimestamp = modules[2].serverTimestamp, query = modules[2].query,
           orderBy = modules[2].orderBy, onSnapshot = modules[2].onSnapshot, limit = modules[2].limit;
 
@@ -183,6 +189,63 @@
         }, function(e) {
           console.error("listenReplies failed", e);
           if (onError) onError(e);
+        });
+      };
+
+      // ---- Moderation (rules are the real gate; see firestore.rules isModerator()).
+      // Resolves true only if /moderators/{uid} exists. Rules let a mom read only her
+      // own moderators doc, so this never leaks who the moderators are.
+      Backend.checkModerator = function(uid) {
+        return getDoc(doc(db, "moderators", uid)).then(function(snap) { return snap.exists(); });
+      };
+
+      Backend.listenReports = function(cb, onError) {
+        var q = query(collection(db, "reports"), orderBy("createdAt", "desc"));
+        return onSnapshot(q, function(snap) {
+          var reports = [];
+          snap.forEach(function(d) {
+            var data = d.data({ serverTimestamps: "estimate" });
+            data.id = d.id;
+            reports.push(data);
+          });
+          cb(reports);
+        }, function(e) {
+          console.error("listenReports failed", e);
+          if (onError) onError(e);
+        });
+      };
+
+      Backend.deleteReport = function(reportId) {
+        return deleteDoc(doc(db, "reports", reportId));
+      };
+
+      // Null when the post no longer exists (already removed by its author/a moderator).
+      Backend.getPost = function(postId) {
+        return getDoc(doc(db, "posts", postId)).then(function(snap) {
+          if (!snap.exists()) return null;
+          var data = snap.data({ serverTimestamps: "estimate" });
+          data.id = snap.id;
+          return data;
+        });
+      };
+
+      // Moderator "Remove post". Firestore does not cascade deletes, so the replies,
+      // the post itself and every report about it go in ONE batch: all-or-nothing, and
+      // rules check each write (a non-moderator gets permission-denied for the lot).
+      // A post that is already gone just has its reports cleared. Batches cap at 500
+      // writes, far beyond a single post's replies at this community's size.
+      Backend.removePost = function(postId) {
+        var postRef = doc(db, "posts", postId);
+        return Promise.all([
+          getDoc(postRef),
+          getDocs(collection(db, "posts/" + postId + "/replies")),
+          getDocs(query(collection(db, "reports"), where("postId", "==", postId)))
+        ]).then(function(res) {
+          var batch = writeBatch(db);
+          res[1].forEach(function(d) { batch.delete(d.ref); });
+          res[2].forEach(function(d) { batch.delete(d.ref); });
+          if (res[0].exists()) batch.delete(postRef);
+          return batch.commit();
         });
       };
 

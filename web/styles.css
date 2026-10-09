@@ -779,6 +779,16 @@ textarea.input { min-height: 140px; resize: none; line-height: 1.55; }
   }
 }
 
+/* ---------- Moderation ---------- */
+.btn-danger { background: var(--danger); color: #fff; }
+.mod-item { margin: 12px 16px; padding: 14px 16px; }
+.mod-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mod-title { font-size: 16px; margin: 10px 0 4px; }
+.mod-body { font-size: 14px; margin: 0; }
+.mod-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.uid-row { cursor: default; }
+.uid-row .tiny { display: block; word-break: break-all; user-select: all; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

@@ -1,8 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Moderators are listed in /moderators/{uid}. Those docs are created BY HAND in the
+    // Firebase console only -- no client can ever write them (see /moderators below).
+    function isModerator() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/moderators/$(request.auth.uid));
+    }
+
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    match /moderators/{uid} {
+      // A signed-in mom may only check whether SHE is a moderator. Writes: never.
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
     }
     
     match /profiles/{uid} {
@@ -28,7 +41,8 @@ service cloud.firestore {
       allow update: if request.auth != null &&
                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['replyCount']) &&
                     request.resource.data.replyCount == resource.data.get('replyCount', 0) + 1;
-      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      // The author may delete her own post; a moderator may delete any post.
+      allow delete: if request.auth != null && (isModerator() || resource.data.uid == request.auth.uid);
 
       match /replies/{replyId} {
         allow read: if request.auth != null;
@@ -38,15 +52,16 @@ service cloud.firestore {
                       request.resource.data.body.size() <= 4000 &&
                       (request.resource.data.get('anon', false) != true ||
                        request.resource.data.get('author', null) == null);
-        allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+        allow delete: if request.auth != null && (isModerator() || resource.data.uid == request.auth.uid);
       }
     }
     
-    // Reports are create-only and unreadable by clients; the reporter can't be forged.
+    // Reports: any signed-in mom can file one (the reporter can't be forged); only
+    // moderators can read them or delete them (dismiss / clean up after a removal).
     match /reports/{reportId} {
       allow create: if request.auth != null &&
                     request.resource.data.reporterUid == request.auth.uid;
-      allow read: if false;
+      allow read, delete: if isModerator();
     }
   }
 }
