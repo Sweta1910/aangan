@@ -311,7 +311,7 @@
       '<button class="btn btn-primary btn-block" data-act="start-phone-onboard" id="get-started">Continue with phone</button>' +
       '<button class="btn btn-ghost btn-block" data-act="skip-onboarding" id="have-account">I already have an account</button>' +
       '<p class="tiny" style="margin-bottom:8px;font-weight:600">Moms supporting moms — not a replacement for your doctor or therapist.</p>' +
-      '<p class="tiny">Prototype · all people, posts and places are fictional demo data</p>' +
+      '<p class="tiny">' + (isRealMode() ? "Real moms, real posts · sign in with Google to join" : "Prototype · all people, posts and places are fictional demo data") + '</p>' +
       "</div></div>" };
   };
   function promiseRow(emoji, bg, title, sub) {
@@ -389,7 +389,7 @@
       '<p class="lead">A quick, private check so this stays a women-only space.</p>' +
       verifyCard +
       '<div class="ob-foot"><button class="btn btn-primary btn-block" data-act="finish-onboarding" id="enter-app"' + (canEnter ? "" : " disabled") + ">Enter " + esc(BRAND.name) + "</button>" +
-      '<p class="tiny" style="text-align:center;margin-top:10px">Demo: no real data is sent anywhere.</p></div>' +
+      (isRealMode() ? "" : '<p class="tiny" style="text-align:center;margin-top:10px">Demo: no real data is sent anywhere.</p>') + "</div>" +
       "</div></div>" };
   };
 
@@ -679,7 +679,7 @@
         (window.Backend.user ? '<div class="link-row uid-row"><span class="grow"><b>Your account ID</b><span class="tiny" id="my-uid">' + esc(window.Backend.user.uid) + '</span></span><button class="btn btn-ghost btn-sm" data-act="copy-uid" id="copy-uid">Copy</button></div>' : "") +
         '<button class="link-row" data-act="sign-out" id="sign-out">' + icon("reset") + '<span class="grow">Sign out</span>' + icon("chevron") + "</button></div></div>" :
         '<button class="link-row" data-act="reset" id="reset-demo">' + icon("reset") + '<span class="grow">Reset demo</span>' + icon("chevron") + "</button></div></div>") +
-      '<p class="footer-note">' + esc(BRAND.name) + " prototype · v0.1 · all data is fictional</p></div>" };
+      '<p class="footer-note">' + esc(BRAND.name) + (isRealMode() ? " · v0.1 · beta" : " prototype · v0.1 · all data is fictional") + "</p></div>" };
   };
 
   // ----------------------------------------------------------- moderation
@@ -1278,7 +1278,7 @@
     if (sc) sc.innerHTML = '<div class="sc-logo">' + logoMark() + '<span class="logo-word">' + esc(BRAND.name) + "</span></div>" +
       "<h2>" + esc(BRAND.tagline) + "</h2><p>" + esc(BRAND.blurb) + " Launching first in Mountain View &amp; Sunnyvale.</p>" +
       '<div class="sc-links">' + links.map(function (l) { return '<a href="' + l[0] + '">' + l[1] + "</a>"; }).join("") + "</div>" +
-      "<small>Clickable prototype · mock data only · all people are fictional</small>";
+      "<small>" + (isRealMode() ? esc(BRAND.name) + " · v0.1 · beta" : "Clickable prototype · mock data only · all people are fictional") + "</small>";
   }
 
   // "Demo mode" badge. Shown ONLY once Backend.ready has resolved with isReal
@@ -1355,6 +1355,7 @@
     if (window.Backend && window.Backend.ready) {
       window.Backend.ready.then(function() {
         if (window.Backend.isReal) {
+          showcase();
           // Coming back from a signInWithRedirect fallback: finish sign-in here.
           window.Backend.getRedirectResult().then(function (result) {
             if (result && result.user) return afterGoogleSignIn(result.user);
@@ -1391,5 +1392,5 @@
 
   // Exposed for tests/screenshot tooling only.
   window.AANGAN = { kindnessScan: kindnessScan, softenText: softenText, reset: function () { localStorage.removeItem(STORE_KEY); },
-    syncModerator: syncModerator };
+    syncModerator: syncModerator, V: V, isRealMode: isRealMode };
 })();

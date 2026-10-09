@@ -415,6 +415,95 @@ class TestRealModeHardening(unittest.TestCase):
         r = subprocess.run([node, "--check", os.path.join(WEB_DIR, "backend.js")], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
 
+    def test_real_mode_vs_demo_mode_wording(self):
+        # In real mode, copy is warm and honest: no claims that data is fictional.
+        # Demo mode retains the prototype/fictional notices.
+        # 1. Welcome screen
+        self.assertIn('"Real moms, real posts · sign in with Google to join"', self.app)
+        self.assertIn('"Prototype · all people, posts and places are fictional demo data"', self.app)
+        self.assertIn('(isRealMode() ? "Real moms, real posts · sign in with Google to join" : "Prototype · all people, posts and places are fictional demo data")', self.app)
+
+        # 2. Me tab footer note
+        self.assertIn('esc(BRAND.name) + (isRealMode() ? " · v0.1 · beta" : " prototype · v0.1 · all data is fictional")', self.app)
+
+        # 3. Showcase footer note
+        self.assertIn('(isRealMode() ? esc(BRAND.name) + " · v0.1 · beta" : "Clickable prototype · mock data only · all people are fictional")', self.app)
+
+        # 4. Onboard verify demo notice
+        self.assertIn('(isRealMode() ? "" : \'<p class="tiny" style="text-align:center;margin-top:10px">Demo: no real data is sent anywhere.</p>\')', self.app)
+
+        # 5. Dynamic execution test verifying rendered HTML across both modes
+        node = shutil.which("node") or os.path.expanduser("~/.local/bin/node")
+        if not node:
+            self.skipTest("node not installed")
+        harness = """
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const webDir = %r;
+const dataJs = fs.readFileSync(path.join(webDir, 'data.js'), 'utf8');
+const appJs = fs.readFileSync(path.join(webDir, 'app.js'), 'utf8');
+function runMode(isReal) {
+  const fakeWindow = {
+    location: { hash: '#welcome', search: '', hostname: 'localhost' },
+    localStorage: {
+      store: {},
+      getItem: function(k) { return this.store[k] || null; },
+      setItem: function(k, v) { this.store[k] = v; },
+      removeItem: function(k) { delete this.store[k]; }
+    },
+    document: {
+      addEventListener: () => {},
+      querySelector: () => null,
+      getElementById: () => null,
+      body: { setAttribute: () => {} }
+    },
+    Backend: { isReal: isReal }
+  };
+  fakeWindow.window = fakeWindow;
+  const ctx = vm.createContext(fakeWindow);
+  vm.runInContext(dataJs, ctx);
+  vm.runInContext(appJs, ctx);
+  const V = fakeWindow.AANGAN.V;
+  const welcome = V.welcome().html;
+  const me = V.me().html;
+  const verify = V['onboard/verify']().html;
+  if (isReal) {
+    if (welcome.includes('fictional') || welcome.includes('demo data') || welcome.includes('Prototype')) {
+      throw new Error('Real mode welcome contains fictional/demo text: ' + welcome);
+    }
+    if (!welcome.includes('Real moms, real posts · sign in with Google to join')) {
+      throw new Error('Real mode welcome missing real-moms text: ' + welcome);
+    }
+    if (me.includes('fictional') || me.includes('all data is fictional')) {
+      throw new Error('Real mode Me tab contains fictional text: ' + me);
+    }
+    if (!me.includes('· v0.1 · beta')) {
+      throw new Error('Real mode Me tab missing beta text: ' + me);
+    }
+    if (verify.includes('Demo: no real data is sent anywhere.')) {
+      throw new Error('Real mode verify contains demo notice: ' + verify);
+    }
+  } else {
+    if (!welcome.includes('Prototype · all people, posts and places are fictional demo data')) {
+      throw new Error('Demo mode welcome missing prototype text: ' + welcome);
+    }
+    if (!me.includes('prototype · v0.1 · all data is fictional')) {
+      throw new Error('Demo mode Me tab missing prototype text: ' + me);
+    }
+    if (!verify.includes('Demo: no real data is sent anywhere.')) {
+      throw new Error('Demo mode verify missing demo notice: ' + verify);
+    }
+  }
+}
+runMode(true);
+runMode(false);
+console.log('OK');
+""" % WEB_DIR
+        r = subprocess.run([node, "-e", harness], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("OK", r.stdout)
+
 
 class TestModeration(unittest.TestCase):
     """Moderation queue: moderators/{uid} made by hand in the console; rules gate it."""
